@@ -1,8 +1,13 @@
 #include "GameEngine.h"
 #include "UIManager.h"
 
-void GameEngine::init() {
-    uiManager.showScreen("start");
+
+GameEngine::GameEngine() : uiManager() {
+
+}
+
+GameEngine::~GameEngine() {
+
 }
 
 void GameEngine::startGame() {
