@@ -10,6 +10,7 @@ public:
     void startGame();
 private:
     UIManager uiManager;
+    void processSettings();
 };
 
 #endif
