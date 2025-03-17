@@ -4,11 +4,14 @@
 #include <iostream>
 #include <string>
 #include "Character.h"
-#include <iomanip>
 
 #ifndef _WIN32
 #include <termios.h>
+#include <unistd.h>
 #endif
+
+// Forward declaration
+class BattleSystem;
 
 class UIManager {
 public:
@@ -16,37 +19,31 @@ public:
     ~UIManager();
     void showScreen(const std::string& screenName);
     int getPlayerChoice();
+    char getCharImmediate(); // Метод для получения символа без нажатия Enter
     
-    // Методы для обработки меню
+    void displayBattleOptions();
+    void displayMagicOptions(const Character& player);
+    void displayBattleScreen(const Character& player, const Character& enemy);
+    void displayInventory(const Character& player);
+    void displayBattleResult(const std::string& message);
+    void clearScreen();
+
     int processMainMenu();
     int processSettingsMenu();
-    
-    // Отображение боевого экрана
-    void displayBattleScreen(const Character& player, const Character& enemy);
-    
-    // Отображение меню магических способностей
-    void displayMagicOptions(const Character& player);
-    
-    // Отображение инвентаря
-    void displayInventory(const Character& player);
-    
-    // Отображение результата сражения
-    void displayBattleResult(const std::string& message);
-    
-    // Очистка экрана
-    void clearScreen();
-    
-    // Новый метод для получения одного символа без нажатия Enter
-    char getCharImmediate();
-    
+
+    // Методы для отображения экранов игры
+    void displayWelcomeScreen();
+    void displayMainMenu();
+    void displaySettingsMenu(BattleSystem& battleSystem);
+    void changeDialoguePauseSettings(BattleSystem& battleSystem);
+    void displayGameOverScreen(int score);
+    void displayDifficultyMenu();
+
 private:
-    // Вспомогательные методы для работы с терминалом
 #ifndef _WIN32
+    struct termios originalTermios;
     void setNonCanonicalMode();
     void restoreTerminalMode();
-    
-    // Сохранение исходных настроек терминала
-    struct termios originalTermios;
 #endif
 };
 

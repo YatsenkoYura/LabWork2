@@ -1,4 +1,5 @@
 #include "UIManager.h"
+#include "BattleSystem.h"
 #include <iostream>
 #include <string>
 #include <limits>
@@ -13,11 +14,21 @@
 #endif
 
 UIManager::UIManager() {
-#ifndef _WIN32
-    // Сохраняем исходные настройки терминала
-    tcgetattr(STDIN_FILENO, &originalTermios);
-#endif
-    setlocale(LC_ALL, "");
+    try {
+        #ifndef _WIN32
+        // Сохраняем исходные настройки терминала
+        tcgetattr(STDIN_FILENO, &originalTermios);
+        #endif
+        
+        // Устанавливаем локаль для поддержки Unicode символов
+        setlocale(LC_ALL, "");
+        
+        // Инициализация других переменных, если нужно
+    } catch (const std::exception& e) {
+        std::cerr << "Ошибка при инициализации UI: " << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Неизвестная ошибка при инициализации UI" << std::endl;
+    }
 }
 
 UIManager::~UIManager() {
@@ -74,7 +85,7 @@ void UIManager::showScreen(const std::string& screenName) {
         
         std::cout << "\n\n";
 
-        std::cout << "          ⚔️  ДУЭЛЬ ПРОТИВ ДЭНЫ  ⚔️          \n\n";
+        std::cout << "          ⚔️  ДУЭЛЬ ПРОТИВ ДЭНА  ⚔️          \n\n";
         
         std::cout << "┌────────────────────────────────────────────┐\n";
         std::cout << "│                                            │\n";
@@ -83,6 +94,8 @@ void UIManager::showScreen(const std::string& screenName) {
         std::cout << "│           ▶  2. НАСТРОЙКИ                 │\n";
         std::cout << "│                                            │\n";
         std::cout << "│           ▶  3. ВЫХОД                     │\n";
+        std::cout << "│                                            │\n";
+        std::cout << "│      Автор: Яценко Юрий (Kan0Shuuya)      │\n";
         std::cout << "│                                            │\n";
         std::cout << "└────────────────────────────────────────────┘\n\n";
         
@@ -100,13 +113,16 @@ void UIManager::showScreen(const std::string& screenName) {
         
         std::cout << "┌────────────────────────────────────────────┐\n";
         std::cout << "│                                            │\n";
-        std::cout << "│           ▶  1. ОТКРЫТЬ GITHUB            │\n";
+        std::cout << "│    ▶  1. ОТКРЫТЬ GITHUB РЕПОЗИТОРИЙ       │\n";
         std::cout << "│                                            │\n";
-        std::cout << "│           ▶  2. ВЕРНУТЬСЯ                 │\n";
+        std::cout << "│    ▶  2. ИЗМЕНИТЬ ПАУЗЫ В ДИАЛОГАХ        │\n";
         std::cout << "│                                            │\n";
+        std::cout << "│    ▶  3. ВЕРНУТЬСЯ В МЕНЮ                 │\n";
         std::cout << "│                                            │\n";
-        std::cout << "│       Разработчик: Kan0Shuya               │\n";
-        std::cout << "│       (Яценко Юрий)                        │\n";
+        std::cout << "│       Разработчик: Яценко Юрий             │\n";
+        std::cout << "│                   (Kan0Shuuya)             │\n";
+        std::cout << "│                                            │\n";
+        std::cout << "│       GitHub: github.com/YatsenkoYura      │\n";
         std::cout << "│                                            │\n";
         std::cout << "└────────────────────────────────────────────┘\n\n";
         
@@ -139,13 +155,12 @@ int UIManager::processMainMenu() {
 }
 
 int UIManager::processSettingsMenu() {
-
     showScreen("settings");
 
     int choice = getPlayerChoice();
 
-    while (choice < 1 || choice > 2) {
-        std::cout << "\n     ⚠️ Пожалуйста, выберите пункт от 1 до 2!\n\n";
+    while (choice < 1 || choice > 3) {
+        std::cout << "\n     ⚠️ Пожалуйста, выберите пункт от 1 до 3!\n\n";
 
         showScreen("settings");
         choice = getPlayerChoice();
@@ -156,171 +171,247 @@ int UIManager::processSettingsMenu() {
 
 void UIManager::displayBattleScreen(const Character& player, const Character& enemy) {
     clearScreen();
-    const int innerWidth = 44;
-
-    // Функция для центрирования текста, если его размер меньше innerWidth
-    auto centerText = [innerWidth](const std::string &s) -> std::string {
-        if ((int)s.size() >= innerWidth) return s;
-        int totalPad = innerWidth - s.size();
-        int padLeft = totalPad / 2;
-        int padRight = totalPad - padLeft;
-        return std::string(padLeft, ' ') + s + std::string(padRight, ' ');
-    };
-
-    // Функция для левостороннего выравнивания
-    auto leftAlign = [innerWidth](const std::string &s) -> std::string {
-        if ((int)s.size() >= innerWidth) return s;
-        return s + std::string(innerWidth - s.size(), ' ');
-    };
-
-    std::cout << "┌────────────────────────────────────────────┐" << std::endl;
-    {
-        std::string title = "БОЕВОЙ ЭКРАН";
-        std::cout << "│" << centerText(title) << "│" << std::endl;
-    }
-    std::cout << "├────────────────────────────────────────────┤" << std::endl;
-    {
-        std::string enemyHeader = "ПРОТИВНИК: " + enemy.getName();
-        std::cout << "│" << leftAlign(enemyHeader) << "│" << std::endl;
-    }
-    {
-        std::string enemyStats;
-        if (enemy.doesHaveMana())
-            enemyStats = "HP: " + std::to_string(enemy.getHealth()) + "  Броня: " + std::to_string(enemy.getDefense()) + "  Мана: " + std::to_string(enemy.getMana());
-        else
-            enemyStats = "HP: " + std::to_string(enemy.getHealth()) + "  Броня: " + std::to_string(enemy.getDefense());
-        std::cout << "│" << leftAlign(enemyStats) << "│" << std::endl;
-    }
-    std::cout << "├────────────────────────────────────────────┤" << std::endl;
-    {
-        std::string playerHeader = "ИГРОК: " + player.getName();
-        std::cout << "│" << leftAlign(playerHeader) << "│" << std::endl;
-    }
-    {
-        std::string playerStats = "HP: " + std::to_string(player.getHealth()) + "  Броня: " + std::to_string(player.getDefense()) + "  Мана: " + std::to_string(player.getMana());
-        std::cout << "│" << leftAlign(playerStats) << "│" << std::endl;
-    }
-    std::cout << "└────────────────────────────────────────────┘" << std::endl << std::endl;
     
-    std::cout << "Доступные действия:" << std::endl;
-    std::cout << "1. Атаковать оружием" << std::endl;
+    // Заголовок
+    std::cout << "\n\n";
+    std::cout << "                БОЕВОЙ ЭКРАН                " << std::endl;
+    std::cout << "------------------------------------------------" << std::endl << std::endl;
+    
+    // Информация о противнике
+    std::cout << "ПРОТИВНИК: " << enemy.getName() << std::endl;
+    std::cout << "HP: " << enemy.getHealth() << "  Атака: " << enemy.getAttack();
+    if (enemy.doesHaveMana())
+        std::cout << "  Мана: " << enemy.getMana();
+    std::cout << std::endl;
+    
+    std::cout << "------------------------------------------------" << std::endl;
+    
+    // Информация об игроке
+    std::cout << "ИГРОК: " << player.getName() << std::endl;
+    std::cout << "HP: " << player.getHealth() << "/" << player.getMaxHealth();
+    std::cout << "  Атака: " << player.getAttack();
+    if (player.doesHaveMana())
+        std::cout << "  Мана: " << player.getMana() << "/" << player.getMaxMana();
+    std::cout << std::endl;
+    
+    std::cout << "------------------------------------------------" << std::endl << std::endl;
+    
+    // Доступные действия
+    std::cout << "Выберите действие:" << std::endl;
+    std::cout << "1. Атаковать" << std::endl;
     std::cout << "2. Использовать магию" << std::endl;
     std::cout << "3. Использовать предмет" << std::endl;
-    std::cout << "4. Информация о противнике" << std::endl;
-    std::cout << "5. Выйти из игры" << std::endl << std::endl;
-    std::cout << "Выберите действие (1-5): ";
+    std::cout << "4. Выйти из игры" << std::endl << std::endl;
+    
+    std::cout << "Ваш выбор (1-4): ";
 }
 
 void UIManager::displayMagicOptions(const Character& player) {
     clearScreen();
-    const int innerWidth = 44;
     
-    auto centerText = [innerWidth](const std::string &s) -> std::string {
-        if ((int)s.size() >= innerWidth) return s;
-        int totalPad = innerWidth - s.size();
-        int padLeft = totalPad / 2;
-        int padRight = totalPad - padLeft;
-        return std::string(padLeft, ' ') + s + std::string(padRight, ' ');
-    };
-    auto leftAlign = [innerWidth](const std::string &s) -> std::string {
-        if ((int)s.size() >= innerWidth) return s;
-        return s + std::string(innerWidth - s.size(), ' ');
-    };
+    // Заголовок
+    std::cout << "\n\n";
+    std::cout << "             МАГИЧЕСКИЕ СПОСОБНОСТИ             " << std::endl;
+    std::cout << "------------------------------------------------" << std::endl << std::endl;
     
-    std::cout << "┌────────────────────────────────────────────┐" << std::endl;
-    {
-        std::string title = "МАГИЧЕСКИЕ СПОСОБНОСТИ";
-        std::cout << "│" << centerText(title) << "│" << std::endl;
-    }
-    std::cout << "├────────────────────────────────────────────┤" << std::endl;
-    {
-        std::string option1 = "1. Огненный шар (атака, 10 маны)";
-        std::string option2 = "2. Ледяной щит (защита, 15 маны)";
-        std::string option3 = "3. Телепортация (уклонение, 20 маны)";
-        std::string option4 = "4. Вернуться назад";
-        std::cout << "│" << leftAlign(option1) << "│" << std::endl;
-        std::cout << "│" << leftAlign(option2) << "│" << std::endl;
-        std::cout << "│" << leftAlign(option3) << "│" << std::endl;
-        std::cout << "│" << leftAlign(option4) << "│" << std::endl;
-    }
-    std::cout << "└────────────────────────────────────────────┘" << std::endl;
-    std::cout << "Текущая мана: " << player.getMana() << std::endl;
+    // Список магических способностей
+    std::cout << "1. Огненный шар (атака, 15 маны)" << std::endl;
+    std::cout << "2. Ледяной щит (защита, 10 маны)" << std::endl;
+    std::cout << "3. Телепортация (лечение, 20 маны)" << std::endl;
+    std::cout << "4. Вернуться назад" << std::endl << std::endl;
+    
+    std::cout << "Текущая мана: " << player.getMana() << std::endl << std::endl;
     std::cout << "Выберите магию (1-4): ";
 }
 
 void UIManager::displayInventory(const Character& player) {
     clearScreen();
-    const int innerWidth = 44;
     
-    auto centerText = [innerWidth](const std::string &s) -> std::string {
-        if ((int)s.size() >= innerWidth) return s;
-        int totalPad = innerWidth - s.size();
-        int padLeft = totalPad / 2;
-        int padRight = totalPad - padLeft;
-        return std::string(padLeft, ' ') + s + std::string(padRight, ' ');
-    };
-    auto leftAlign = [innerWidth](const std::string &s) -> std::string {
-        if ((int)s.size() >= innerWidth) return s;
-        return s + std::string(innerWidth - s.size(), ' ');
-    };
-
-    std::cout << "┌────────────────────────────────────────────┐" << std::endl;
-    {
-        std::string title = "ИНВЕНТАРЬ";
-        std::cout << "│" << centerText(title) << "│" << std::endl;
-    }
-    std::cout << "├────────────────────────────────────────────┤" << std::endl;
+    // Заголовок
+    std::cout << "\n\n";
+    std::cout << "                  ИНВЕНТАРЬ                  " << std::endl;
+    std::cout << "------------------------------------------------" << std::endl << std::endl;
+    
+    // Список предметов
     const auto& inventory = player.getInventory();
     if (inventory.empty()) {
-        std::string emptyMsg = "ИНВЕНТАРЬ ПУСТ";
-        std::cout << "│" << centerText(emptyMsg) << "│" << std::endl;
+        std::cout << "            ИНВЕНТАРЬ ПУСТ            " << std::endl;
     } else {
         int index = 1;
         for (const auto& item : inventory) {
-            std::string lineItem = std::to_string(index) + ". " + item.getName();
-            std::cout << "│" << leftAlign(lineItem) << "│" << std::endl;
+            std::cout << index << ". " << item.name << std::endl;
             index++;
         }
     }
-    std::cout << "└────────────────────────────────────────────┘" << std::endl;
+    
+    std::cout << std::endl;
     std::cout << "Выберите предмет (1-" << inventory.size() + 1 << "): ";
 }
 
 void UIManager::displayBattleResult(const std::string& message) {
     clearScreen();
-    const int innerWidth = 44;
     
-    auto centerText = [innerWidth](const std::string &s) -> std::string {
-        if ((int)s.size() >= innerWidth) return s;
-        int totalPad = innerWidth - s.size();
-        int padLeft = totalPad / 2;
-        int padRight = totalPad - padLeft;
-        return std::string(padLeft, ' ') + s + std::string(padRight, ' ');
-    };
-    auto leftAlign = [innerWidth](const std::string &s) -> std::string {
-        if ((int)s.size() >= innerWidth) return s;
-        return s + std::string(innerWidth - s.size(), ' ');
-    };
-
-    std::cout << "┌────────────────────────────────────────────┐" << std::endl;
-    {
-        std::string title = "РЕЗУЛЬТАТ СРАЖЕНИЯ";
-        std::cout << "│" << centerText(title) << "│" << std::endl;
-    }
-    std::cout << "├────────────────────────────────────────────┤" << std::endl;
-    {
-        std::cout << "│ " << leftAlign(message) << "│" << std::endl;
-    }
-    std::cout << "└────────────────────────────────────────────┘" << std::endl << std::endl;
-    std::cout << "Нажмите Enter для продолжения...";
-    std::cin.ignore();
-    std::cin.get();
+    // Заголовок
+    std::cout << "\n\n";
+    std::cout << "              РЕЗУЛЬТАТ СРАЖЕНИЯ              " << std::endl;
+    std::cout << "------------------------------------------------" << std::endl << std::endl;
+    
+    // Сообщение о результате
+    std::cout << message << std::endl << std::endl;
+    
+    // Небольшая задержка, чтобы игрок мог увидеть сообщение
+    #ifdef _WIN32
+    Sleep(1000); // 1 секунда для Windows
+    #else
+    usleep(1000000); // 1 секунда (в микросекундах) для Unix
+    #endif
 }
 
 void UIManager::clearScreen() {
+    try {
+        #ifdef _WIN32
+        system("cls");
+        #else
+        system("clear");
+        #endif
+    } catch (const std::exception& e) {
+        std::cerr << "Ошибка при очистке экрана: " << e.what() << std::endl;
+    } catch (...) {
+        // Если произошла неизвестная ошибка, просто продолжаем выполнение
+    }
+}
+
+void UIManager::displayBattleOptions() {
+    clearScreen();
+    
+    // Заголовок
+    std::cout << "\n\n";
+    std::cout << "                БОЕВЫЕ ДЕЙСТВИЯ                " << std::endl;
+    std::cout << "------------------------------------------------" << std::endl << std::endl;
+    
+    // Доступные действия
+    std::cout << "Выберите действие:" << std::endl;
+    std::cout << "1. Атаковать оружием" << std::endl;
+    std::cout << "2. Использовать магию" << std::endl;
+    std::cout << "3. Использовать предмет" << std::endl;
+    std::cout << "4. Информация о враге" << std::endl;
+    std::cout << "5. Выйти из игры" << std::endl << std::endl;
+    
+    std::cout << "Ваш выбор (1-5): ";
+}
+
+void UIManager::displaySettingsMenu(BattleSystem& battleSystem) {
+    clearScreen();
+    std::cout << "=== НАСТРОЙКИ ИГРЫ ===" << std::endl << std::endl;
+    std::cout << "1. Изменить время пауз в диалогах (текущее: " 
+              << battleSystem.getDialoguePauseDuration() << " мс)" << std::endl;
+    std::cout << "2. Вернуться в главное меню" << std::endl << std::endl;
+    
+    std::cout << "Ваш выбор (1-2): ";
+    int choice = getPlayerChoice();
+    
+    switch (choice) {
+        case 1:
+            changeDialoguePauseSettings(battleSystem);
+            break;
+        case 2:
+            return;
+        default:
+            std::cout << "Неверный выбор. Возврат в меню настроек." << std::endl;
+            // Небольшая задержка
+            #ifdef _WIN32
+            Sleep(1000);
+            #else
+            usleep(1000000);
+            #endif
+            displaySettingsMenu(battleSystem);
+            break;
+    }
+}
+
+void UIManager::changeDialoguePauseSettings(BattleSystem& battleSystem) {
+    clearScreen();
+    std::cout << "=== НАСТРОЙКА ВРЕМЕНИ ПАУЗ ===" << std::endl << std::endl;
+    std::cout << "Текущее время паузы: " << battleSystem.getDialoguePauseDuration() << " мс" << std::endl;
+    std::cout << "Выберите новое время паузы:" << std::endl;
+    std::cout << "1. Очень быстро (1000 мс)" << std::endl;
+    std::cout << "2. Быстро (1500 мс)" << std::endl;
+    std::cout << "3. Средне (2000 мс)" << std::endl;
+    std::cout << "4. Медленно (2500 мс)" << std::endl;
+    std::cout << "5. Очень медленно (3000 мс)" << std::endl;
+    std::cout << "6. Ввести своё значение" << std::endl;
+    std::cout << "7. Вернуться в меню настроек" << std::endl << std::endl;
+    
+    std::cout << "Ваш выбор (1-7): ";
+    int choice = getPlayerChoice();
+    
+    int newDuration = battleSystem.getDialoguePauseDuration(); // По умолчанию оставляем текущее
+    
+    switch (choice) {
+        case 1:
+            newDuration = 1000;
+            break;
+        case 2:
+            newDuration = 1500;
+            break;
+        case 3:
+            newDuration = 2000;
+            break;
+        case 4:
+            newDuration = 2500;
+            break;
+        case 5:
+            newDuration = 3000;
+            break;
+        case 6:
+            std::cout << "Введите новое время паузы в миллисекундах (500-5000): ";
+            std::cin >> newDuration;
+            if (newDuration < 500) newDuration = 500;
+            if (newDuration > 5000) newDuration = 5000;
+            break;
+        case 7:
+            displaySettingsMenu(battleSystem);
+            return;
+        default:
+            std::cout << "Неверный выбор. Возврат в меню настроек." << std::endl;
+            // Небольшая задержка
+            #ifdef _WIN32
+            Sleep(1000);
+            #else
+            usleep(1000000);
+            #endif
+            displaySettingsMenu(battleSystem);
+            return;
+    }
+    
+    battleSystem.setDialoguePauseDuration(newDuration);
+    std::cout << "Время паузы установлено на " << newDuration << " мс." << std::endl;
+    
+    // Небольшая задержка
     #ifdef _WIN32
-    system("cls");
+    Sleep(1500);
     #else
-    system("clear");
+    usleep(1500000);
     #endif
+    
+    displaySettingsMenu(battleSystem);
+}
+
+void UIManager::displayMainMenu() {
+    try {
+        clearScreen();
+        std::cout << "===========================================" << std::endl;
+        std::cout << "          БИТВА С ДЭНОМ ПЕРЕБИТОВЫМ       " << std::endl;
+        std::cout << "===========================================" << std::endl << std::endl;
+        
+        std::cout << "1. Новая игра" << std::endl;
+        std::cout << "2. Настройки" << std::endl;
+        std::cout << "3. Выход" << std::endl << std::endl;
+        
+        std::cout << "Ваш выбор (1-3): ";
+    } catch (const std::exception& e) {
+        std::cerr << "Ошибка при отображении главного меню: " << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Неизвестная ошибка при отображении главного меню" << std::endl;
+    }
 } 
