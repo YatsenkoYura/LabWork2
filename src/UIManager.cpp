@@ -16,14 +16,11 @@
 UIManager::UIManager() {
     try {
         #ifndef _WIN32
-        // Сохраняем исходные настройки терминала
         tcgetattr(STDIN_FILENO, &originalTermios);
         #endif
         
-        // Устанавливаем локаль для поддержки Unicode символов
         setlocale(LC_ALL, "");
         
-        // Инициализация других переменных, если нужно
     } catch (const std::exception& e) {
         std::cerr << "Ошибка при инициализации UI: " << e.what() << std::endl;
     } catch (...) {
@@ -33,18 +30,14 @@ UIManager::UIManager() {
 
 UIManager::~UIManager() {
 #ifndef _WIN32
-    // Восстанавливаем исходные настройки терминала
     tcsetattr(STDIN_FILENO, TCSANOW, &originalTermios);
 #endif
 }
 
-// Метод для получения одного символа без нажатия Enter
 char UIManager::getCharImmediate() {
 #ifdef _WIN32
-    // В Windows используем _getch()
     return _getch();
 #else
-    // В Unix-подобных системах используем неканонический режим
     setNonCanonicalMode();
     char ch = getchar();
     restoreTerminalMode();
@@ -53,22 +46,17 @@ char UIManager::getCharImmediate() {
 }
 
 #ifndef _WIN32
-// Установка неканонического режима терминала
 void UIManager::setNonCanonicalMode() {
     struct termios newTermios = originalTermios;
     
-    // Отключаем канонический режим и эхо
     newTermios.c_lflag &= ~(ICANON | ECHO);
     
-    // Устанавливаем минимальное количество символов для чтения = 1
     newTermios.c_cc[VMIN] = 1;
     newTermios.c_cc[VTIME] = 0;
     
-    // Применяем новые настройки
     tcsetattr(STDIN_FILENO, TCSANOW, &newTermios);
 }
 
-// Восстановление исходного режима терминала
 void UIManager::restoreTerminalMode() {
     tcsetattr(STDIN_FILENO, TCSANOW, &originalTermios);
 }
@@ -133,12 +121,11 @@ void UIManager::showScreen(const std::string& screenName) {
 int UIManager::getPlayerChoice() {
     char ch = getCharImmediate();
     
-    // Преобразуем символ в число, если это цифра
     if (ch >= '1' && ch <= '9') {
         return ch - '0';
     }
     
-    return -1; // Некорректный ввод
+    return -1;
 }
 
 int UIManager::processMainMenu() {
@@ -172,12 +159,10 @@ int UIManager::processSettingsMenu() {
 void UIManager::displayBattleScreen(const Character& player, const Character& enemy) {
     clearScreen();
     
-    // Заголовок
     std::cout << "\n\n";
     std::cout << "                БОЕВОЙ ЭКРАН                " << std::endl;
     std::cout << "------------------------------------------------" << std::endl << std::endl;
     
-    // Информация о противнике
     std::cout << "ПРОТИВНИК: " << enemy.getName() << std::endl;
     std::cout << "HP: " << enemy.getHealth() << "  Атака: " << enemy.getAttack();
     if (enemy.doesHaveMana())
@@ -186,7 +171,6 @@ void UIManager::displayBattleScreen(const Character& player, const Character& en
     
     std::cout << "------------------------------------------------" << std::endl;
     
-    // Информация об игроке
     std::cout << "ИГРОК: " << player.getName() << std::endl;
     std::cout << "HP: " << player.getHealth() << "/" << player.getMaxHealth();
     std::cout << "  Атака: " << player.getAttack();
@@ -196,7 +180,6 @@ void UIManager::displayBattleScreen(const Character& player, const Character& en
     
     std::cout << "------------------------------------------------" << std::endl << std::endl;
     
-    // Доступные действия
     std::cout << "Выберите действие:" << std::endl;
     std::cout << "1. Атаковать" << std::endl;
     std::cout << "2. Использовать магию" << std::endl;
@@ -209,12 +192,10 @@ void UIManager::displayBattleScreen(const Character& player, const Character& en
 void UIManager::displayMagicOptions(const Character& player) {
     clearScreen();
     
-    // Заголовок
     std::cout << "\n\n";
     std::cout << "             МАГИЧЕСКИЕ СПОСОБНОСТИ             " << std::endl;
     std::cout << "------------------------------------------------" << std::endl << std::endl;
     
-    // Список магических способностей
     std::cout << "1. Огненный шар (атака, 15 маны)" << std::endl;
     std::cout << "2. Ледяной щит (защита, 10 маны)" << std::endl;
     std::cout << "3. Телепортация (лечение, 20 маны)" << std::endl;
@@ -227,12 +208,10 @@ void UIManager::displayMagicOptions(const Character& player) {
 void UIManager::displayInventory(const Character& player) {
     clearScreen();
     
-    // Заголовок
     std::cout << "\n\n";
     std::cout << "                  ИНВЕНТАРЬ                  " << std::endl;
     std::cout << "------------------------------------------------" << std::endl << std::endl;
     
-    // Список предметов
     const auto& inventory = player.getInventory();
     if (inventory.empty()) {
         std::cout << "            ИНВЕНТАРЬ ПУСТ            " << std::endl;
@@ -251,19 +230,16 @@ void UIManager::displayInventory(const Character& player) {
 void UIManager::displayBattleResult(const std::string& message) {
     clearScreen();
     
-    // Заголовок
     std::cout << "\n\n";
     std::cout << "              РЕЗУЛЬТАТ СРАЖЕНИЯ              " << std::endl;
     std::cout << "------------------------------------------------" << std::endl << std::endl;
     
-    // Сообщение о результате
     std::cout << message << std::endl << std::endl;
     
-    // Небольшая задержка, чтобы игрок мог увидеть сообщение
     #ifdef _WIN32
-    Sleep(1000); // 1 секунда для Windows
+    Sleep(1000);
     #else
-    usleep(1000000); // 1 секунда (в микросекундах) для Unix
+    usleep(1000000);
     #endif
 }
 
@@ -277,19 +253,16 @@ void UIManager::clearScreen() {
     } catch (const std::exception& e) {
         std::cerr << "Ошибка при очистке экрана: " << e.what() << std::endl;
     } catch (...) {
-        // Если произошла неизвестная ошибка, просто продолжаем выполнение
     }
 }
 
 void UIManager::displayBattleOptions() {
     clearScreen();
     
-    // Заголовок
     std::cout << "\n\n";
     std::cout << "                БОЕВЫЕ ДЕЙСТВИЯ                " << std::endl;
     std::cout << "------------------------------------------------" << std::endl << std::endl;
     
-    // Доступные действия
     std::cout << "Выберите действие:" << std::endl;
     std::cout << "1. Атаковать оружием" << std::endl;
     std::cout << "2. Использовать магию" << std::endl;
@@ -318,7 +291,6 @@ void UIManager::displaySettingsMenu(BattleSystem& battleSystem) {
             return;
         default:
             std::cout << "Неверный выбор. Возврат в меню настроек." << std::endl;
-            // Небольшая задержка
             #ifdef _WIN32
             Sleep(1000);
             #else
@@ -345,7 +317,7 @@ void UIManager::changeDialoguePauseSettings(BattleSystem& battleSystem) {
     std::cout << "Ваш выбор (1-7): ";
     int choice = getPlayerChoice();
     
-    int newDuration = battleSystem.getDialoguePauseDuration(); // По умолчанию оставляем текущее
+    int newDuration = battleSystem.getDialoguePauseDuration();
     
     switch (choice) {
         case 1:
@@ -374,7 +346,6 @@ void UIManager::changeDialoguePauseSettings(BattleSystem& battleSystem) {
             return;
         default:
             std::cout << "Неверный выбор. Возврат в меню настроек." << std::endl;
-            // Небольшая задержка
             #ifdef _WIN32
             Sleep(1000);
             #else
@@ -387,7 +358,6 @@ void UIManager::changeDialoguePauseSettings(BattleSystem& battleSystem) {
     battleSystem.setDialoguePauseDuration(newDuration);
     std::cout << "Время паузы установлено на " << newDuration << " мс." << std::endl;
     
-    // Небольшая задержка
     #ifdef _WIN32
     Sleep(1500);
     #else
@@ -406,9 +376,10 @@ void UIManager::displayMainMenu() {
         
         std::cout << "1. Новая игра" << std::endl;
         std::cout << "2. Настройки" << std::endl;
-        std::cout << "3. Выход" << std::endl << std::endl;
+        std::cout << "3. Таблица лидеров" << std::endl;
+        std::cout << "4. Выход" << std::endl << std::endl;
         
-        std::cout << "Ваш выбор (1-3): ";
+        std::cout << "Ваш выбор (1-4): ";
     } catch (const std::exception& e) {
         std::cerr << "Ошибка при отображении главного меню: " << e.what() << std::endl;
     } catch (...) {

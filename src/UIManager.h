@@ -10,7 +10,6 @@
 #include <unistd.h>
 #endif
 
-// Forward declaration
 class BattleSystem;
 
 class UIManager {
@@ -19,7 +18,7 @@ public:
     ~UIManager();
     void showScreen(const std::string& screenName);
     int getPlayerChoice();
-    char getCharImmediate(); // Метод для получения символа без нажатия Enter
+    char getCharImmediate();
     
     void displayBattleOptions();
     void displayMagicOptions(const Character& player);
@@ -31,7 +30,6 @@ public:
     int processMainMenu();
     int processSettingsMenu();
 
-    // Методы для отображения экранов игры
     void displayWelcomeScreen();
     void displayMainMenu();
     void displaySettingsMenu(BattleSystem& battleSystem);
@@ -47,4 +45,4 @@ private:
 #endif
 };
 
-#endif // UIMANAGER_H 
+#endif

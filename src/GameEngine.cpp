@@ -4,16 +4,21 @@
 #include <limits>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 GameEngine::GameEngine() 
     : uiManager(), 
       aiController(uiManager), 
       battleSystem(uiManager, aiController), 
       shopSystem(uiManager),
       inventorySystem(uiManager),
-      currentRound(1),
-      score(0) {
+      scoreManager(uiManager),
+      currentRound(1) {
     
-    // Инициализация персонажей
     setupCharacters();
 }
 
@@ -30,14 +35,20 @@ void GameEngine::run() {
                 int choice = uiManager.getPlayerChoice();
                 
                 switch (choice) {
-                    case 1: // Новая игра
+                    case 1:
                         initializeGame();
                         runGameLoop();
                         break;
-                    case 2: // Настройки
+                    case 2:
                         processSettings();
                         break;
-                    case 3: // Выход
+                    case 3:
+                        loadGame();
+                        break;
+                    case 4:
+                        scoreManager.displayLeaderboard();
+                        break;
+                    case 5:
                         isRunning = false;
                         break;
                     default:
@@ -46,7 +57,6 @@ void GameEngine::run() {
                 }
             } catch (const std::exception& e) {
                 std::cerr << "Ошибка во время выполнения: " << e.what() << std::endl;
-                // Небольшая пауза, чтобы пользователь мог прочитать сообщение
                 #ifdef _WIN32
                 Sleep(3000);
                 #else
@@ -54,7 +64,6 @@ void GameEngine::run() {
                 #endif
             } catch (...) {
                 std::cerr << "Неизвестная ошибка во время выполнения" << std::endl;
-                // Небольшая пауза
                 #ifdef _WIN32
                 Sleep(3000);
                 #else
@@ -73,7 +82,7 @@ void GameEngine::processSettings() {
     int settingsChoice = uiManager.processSettingsMenu();
     
     switch (settingsChoice) {
-        case 1: // Открыть GitHub
+        case 1:
             std::cout << "\n     Открываем GitHub репозиторий...\n";
             #ifdef _WIN32
             system("start https://github.com/YatsenkoYura/LabWork2");
@@ -83,7 +92,6 @@ void GameEngine::processSettings() {
             system("xdg-open https://github.com/YatsenkoYura/LabWork2");
             #endif
             
-            // Небольшая задержка
             #ifdef _WIN32
             Sleep(1000);
             #else
@@ -91,21 +99,19 @@ void GameEngine::processSettings() {
             #endif
             break;
             
-        case 2: // Настройка пауз в диалогах
+        case 2:
             uiManager.displaySettingsMenu(battleSystem);
             break;
             
-        case 3: // Вернуться в главное меню
+        case 3:
             return;
     }
 }
 
 void GameEngine::initializeGame() {
-    // Сброс игровых переменных
     currentRound = 1;
-    score = 0;
+    scoreManager.setScore(0);
     
-    // Настройка персонажей для начала игры
     setupCharacters();
 }
 
@@ -113,99 +119,122 @@ void GameEngine::runGameLoop() {
     bool gameInProgress = true;
     
     while (gameInProgress) {
-        // Бой с противником
+        bool exitGame = showGameMenu();
+        if (exitGame) {
+            gameInProgress = false;
+            continue;
+        }
+        
         bool playerWon = processBattle();
         
         if (playerWon) {
-            // Игрок победил
-            score += 100 * currentRound;
+            scoreManager.addScore(100 * currentRound);
             
-            // Показываем экран распределения очков
             handlePostVictory(player);
             
-            // Подготовка к следующему раунду
             currentRound++;
             updateEnemyForNextRound();
         } else {
-            // Игрок проиграл
             gameOver();
             gameInProgress = false;
         }
     }
 }
 
+bool GameEngine::showGameMenu() {
+    bool exitGame = false;
+    
+    uiManager.clearScreen();
+    std::cout << "\n\n";
+    std::cout << "            ИГРОВОЕ МЕНЮ            " << std::endl;
+    std::cout << "-------------------------------------" << std::endl;
+    std::cout << "\nТекущий раунд: " << currentRound << std::endl;
+    std::cout << "Текущий счет: " << scoreManager.getScore() << std::endl;
+    
+    std::cout << "\nВыберите действие:" << std::endl;
+    std::cout << "1. Продолжить игру" << std::endl;
+    std::cout << "2. Сохранить игру" << std::endl;
+    std::cout << "3. Выйти в главное меню" << std::endl;
+    
+    char choice = uiManager.getCharImmediate();
+    
+    switch (choice) {
+        case '1':
+            return false; // Продолжаем игру
+        case '2':
+            saveGame();
+            return showGameMenu(); // Возвращаемся в меню после сохранения
+        case '3':
+            return true; // Выходим в главное меню
+        default:
+            return showGameMenu(); // Если неверный ввод, повторяем меню
+    }
+}
+
+void GameEngine::saveGame() {
+    scoreManager.displaySaveGameMenu(player, currentRound);
+}
+
+void GameEngine::loadGame() {
+    std::string playerName;
+    bool loaded = scoreManager.loadGame(player, currentRound, playerName);
+    
+    if (loaded) {
+        updateEnemyForNextRound(); // Обновляем статы врага для текущего раунда
+        runGameLoop(); // Запускаем игровой цикл с загруженными данными
+    }
+}
+
 void GameEngine::gameOver() {
-    std::cout << "Игра окончена! Ваш счет: " << score << std::endl;
-    std::cout << "Вы прошли " << currentRound - 1 << " раундов." << std::endl;
-    
-    // Здесь можно добавить сохранение результата в таблицу лидеров
-    
-    // Небольшая задержка перед возвратом в меню
-    #ifdef _WIN32
-    Sleep(2000);
-    #else
-    usleep(2000000);
-    #endif
+    scoreManager.processGameOver(currentRound - 1);
 }
 
 void GameEngine::setupCharacters() {
-    // Настройка игрока - убираем защиту (делаем её 0)
-    player = Character("Герой", 100, 0, 50, true, 10);
+    player = Character("Герой", 50, 0, 30, true, 12);
     
-    // Настройка противника - даем ему ману для очков действий
-    enemy = Character("Дэн", 80, 0, 30, true, 8); // Даем Дэну 30 очков действий
+    enemy = Character("Дэн", 40, 0, 20, true, 5);
 }
 
 void GameEngine::updateEnemyForNextRound() {
-    // Увеличение характеристик противника с каждым раундом
     enemy = Character("Дэн", 
-                     80 + 20 * currentRound,  // Увеличение здоровья
-                     0,                       // Защита всегда 0
-                     30 + 10 * currentRound,  // Увеличение очков действий (маны) с каждым раундом
-                     true,                    // hasMana = true для очков действий
-                     8 + 2 * currentRound);   // Увеличение атаки
+                     40 + 15 * currentRound,
+                     0,
+                     20 + 10 * currentRound,
+                     true,
+                     5 + 2 * currentRound);
     
-    // Закупка атак для нового раунда
     aiController.buyAttacksForRound(enemy, currentRound);
 }
 
 bool GameEngine::processBattle() {
-    // Подготавливаем атаки для Дэна перед началом раунда
     aiController.buyAttacksForRound(enemy, currentRound);
     
     battleSystem.startBattle(player, enemy, currentRound);
     
     if (!enemy.isAlive()) {
-        // Увеличиваем счет за победу
-        score += 100 * currentRound;
+        scoreManager.addScore(100 * currentRound);
         return true;
     } else {
-        // Игрок проиграл
         return false;
     }
 }
 
 void GameEngine::handlePostVictory(Character &player) {
-    // Сначала очищаем экран
     #ifdef _WIN32
     system("cls");
     #else
     system("clear");
     #endif
     
-    // Полностью восстанавливаем здоровье игрока
     player.heal(player.getMaxHealth());
     
-    // Восстанавливаем ману игрока до максимума, а не превышая её
     if (player.doesHaveMana()) {
-        // Вычисляем, сколько маны нужно восстановить
         int manaToRestore = player.getMaxMana() - player.getMana();
         if (manaToRestore > 0) {
-            player.useMana(-manaToRestore); // Используем отрицательное значение для восстановления
+            player.useMana(-manaToRestore);
         }
     }
     
-    // Сообщение о победе
     std::cout << "\n\n";
     std::cout << "                  ПОБЕДА!                  " << std::endl;
     std::cout << "------------------------------------------------" << std::endl;
@@ -215,14 +244,12 @@ void GameEngine::handlePostVictory(Character &player) {
     std::cout << "Здоровье: " << player.getHealth() << "/" << player.getMaxHealth() << std::endl;
     std::cout << "Атака: " << player.getAttack() << std::endl;
     std::cout << "Мана: " << player.getMana() << "/" << player.getMaxMana() << std::endl;
+    std::cout << "Текущий счет: " << scoreManager.getScore() << std::endl;
     
-    // Даем 3 очка вместо 5
     int points = 3;
     
-    // Для отслеживания выбора игрока
     int lastPlayerChoice = 0;
     
-    // Распределение очков
     while (points > 0) {
         #ifdef _WIN32
         system("cls");
@@ -238,47 +265,42 @@ void GameEngine::handlePostVictory(Character &player) {
         std::cout << "Здоровье: " << player.getHealth() << "/" << player.getMaxHealth() << std::endl;
         std::cout << "Атака: " << player.getAttack() << std::endl;
         std::cout << "Мана: " << player.getMana() << "/" << player.getMaxMana() << std::endl;
+        std::cout << "Текущий счет: " << scoreManager.getScore() << std::endl;
         
         std::cout << "\nВыберите атрибут для улучшения:" << std::endl;
-        std::cout << "1. Здоровье (+10)" << std::endl;
+        std::cout << "1. Здоровье (+15)" << std::endl;
         std::cout << "2. Атака (+3)" << std::endl;
         std::cout << "3. Мана (+5)" << std::endl;
         
-        // Используем getCharImmediate для моментального ввода без Enter
         char choice = uiManager.getCharImmediate();
         
         switch(choice) {
-            case '1': // Увеличиваем здоровье
-                player.boostHealth(10);
+            case '1':
+                player.boostHealth(15);
                 lastPlayerChoice = 1;
                 points--;
                 break;
-            case '2': // Увеличиваем атаку
+            case '2':
                 player.boostAttack(3);
                 lastPlayerChoice = 2;
                 points--;
                 break;
-            case '3': // Увеличиваем ману
+            case '3':
                 player.boostMana(5);
                 lastPlayerChoice = 3;
                 points--;
                 break;
             default:
-                // Если нажата не 1-3, ничего не делаем и продолжаем цикл
                 break;
         }
         
-        // Если игрок сделал выбор, противник тоже прокачивается
         if (lastPlayerChoice > 0) {
-            // Вызываем распределение очков ИИ
             aiController.distributePointsBasedOnPlayerChoice(enemy, lastPlayerChoice);
             
-            // Сбрасываем выбор игрока
             lastPlayerChoice = 0;
         }
     }
     
-    // Показываем финальные характеристики
     #ifdef _WIN32
     system("cls");
     #else
@@ -292,7 +314,7 @@ void GameEngine::handlePostVictory(Character &player) {
     std::cout << "Здоровье: " << player.getHealth() << "/" << player.getMaxHealth() << std::endl;
     std::cout << "Атака: " << player.getAttack() << std::endl;
     std::cout << "Мана: " << player.getMana() << "/" << player.getMaxMana() << std::endl;
+    std::cout << "Текущий счет: " << scoreManager.getScore() << std::endl;
     
-    // Переход в магазин (без ожидания нажатия клавиши)
     shopSystem.openShop(player, currentRound);
 } 

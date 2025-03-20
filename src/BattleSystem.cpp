@@ -1,25 +1,30 @@
 #include "BattleSystem.h"
 #include "UIManager.h"
 #include "AIController.h"
+#include "InventorySystem.h"
 #include <iostream>
 #include <cstdlib>
 #include <vector>
 #include <random>
 
 BattleSystem::BattleSystem(UIManager& uiManager, AIController& ai) 
-    : uiManager(uiManager), aiController(ai), playerStunned(false), playerStunDuration(0), dialoguePauseDuration(2000), activeBuffs() {
+    : uiManager(uiManager), 
+      aiController(ai), 
+      buffSystem(uiManager),
+      potionSystem(uiManager, buffSystem),
+      playerStunned(false), 
+      playerStunDuration(0), 
+      dialoguePauseDuration(2000) {
 }
 
-// Метод для создания паузы заданной длительности
 void BattleSystem::pauseForDialogue() const {
     #ifdef _WIN32
     Sleep(dialoguePauseDuration);
     #else
-    usleep(dialoguePauseDuration * 1000); // usleep принимает микросекунды
+    usleep(dialoguePauseDuration * 1000);
     #endif
 }
 
-// Методы для управления настройками пауз
 void BattleSystem::setDialoguePauseDuration(int milliseconds) {
     if (milliseconds >= 0) {
         dialoguePauseDuration = milliseconds;
@@ -33,33 +38,26 @@ int BattleSystem::getDialoguePauseDuration() const {
 void BattleSystem::startBattle(Character& player, Character& enemy, int round) {
     bool battleContinues = true;
     
-    // Сбрасываем состояния оглушения
     playerStunned = false;
     playerStunDuration = 0;
     
-    // Очищаем список активных баффов в начале боя
-    activeBuffs.clear();
+    buffSystem.clearBuffs();
     
-    // Подготовка для прогнозирования действий Дэна
     EnemyAttack nextEnemyAction;
     bool hasNextAction = false;
     
-    // Для отслеживания последнего выбранного игроком действия и заклинания
     int playerLastChoice = 0;
-    int playerLastSpell = 0; // Добавляем переменную для отслеживания выбранного заклинания
+    int playerLastSpell = 0;
 
-    // Если это первый раунд, устанавливаем специальное поведение для Дэна
     if (round == 1) {
         aiController.setFirstRoundBehavior();
     }
     
-    // Отображаем информацию о начале боя
     uiManager.clearScreen();
     std::cout << "\n\n";
     std::cout << "           НАЧАЛО БОЯ: РАУНД " << round << "           " << std::endl;
     std::cout << "------------------------------------------------" << std::endl << std::endl;
     
-    // Добавляем приветственную фразу Дэна в начале боя
     std::vector<std::string> introductoryPhrases = {
         "Ну что, готов проверить, насколько ты слаб? *ухмыляется*",
         "Наконец-то достойный соперник... Или нет? *оценивающе смотрит*",
@@ -68,65 +66,51 @@ void BattleSystem::startBattle(Character& player, Character& enemy, int round) {
         "Я вижу в твоих глазах страх. Правильно, бойся! *насмешливо улыбается*"
     };
     
-    // Выбор случайной приветственной фразы
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> distrib(0, introductoryPhrases.size() - 1);
     
-    // Выводим приветственную фразу Дэна более наглядно
     std::cout << "--------------------------------------------------------\n";
     std::cout << enemy.getName() << ": \"" << introductoryPhrases[distrib(gen)] << "\"\n";
     std::cout << "--------------------------------------------------------\n";
-    pauseForDialogue(); // Делаем паузу для чтения
+    pauseForDialogue();
     
-    // Нажмите любую клавишу для продолжения
     std::cout << "\nНажмите любую клавишу для начала боя...";
     uiManager.getCharImmediate();
     
-    // Определяем первое действие Дэна для подсказки сразу после начала боя
-    nextEnemyAction = aiController.determineNextAction(enemy, round, true); // true - только предсказание
-    hasNextAction = true; // Устанавливаем флаг, что у нас есть подсказка
+    nextEnemyAction = aiController.determineNextAction(enemy, round, true);
+    hasNextAction = true;
     
     while (battleContinues) {
-        // Отображаем боевой экран с информацией о персонажах
         uiManager.displayBattleScreen(player, enemy);
         
-        // Отображаем статистику доступных атак Дэна
         displayEnemyAttackStats();
         
-        // Если у нас есть следующее действие Дэна, показываем подсказку
         if (hasNextAction) {
             displayEnemyHint(nextEnemyAction);
         }
         
-        // Проверяем, не оглушен ли игрок
         if (playerStunned) {
             std::cout << "\nВы оглушены и пропускаете ход!" << std::endl;
             
-            // Уменьшаем длительность оглушения
             playerStunDuration--;
             if (playerStunDuration <= 0) {
                 playerStunned = false;
             }
             
-            // Пропускаем ход игрока, переходим к ходу противника
         } else {
-            // Ход игрока
             int choice = uiManager.getPlayerChoice();
-            playerLastChoice = choice; // Сохраняем выбор игрока
+            playerLastChoice = choice;
             
             switch(choice) {
-                case 1: // Обычная атака
+                case 1:
                     {
-                        // Атака игрока
                         int playerDamage = calculateDamage(player, enemy);
                         enemy.takeDamage(playerDamage);
                         std::cout << "\nВы атакуете " << enemy.getName() << "!" << std::endl;
                         
-                        // Пауза после сообщения об атаке
                         pauseForDialogue();
                         
-                        // Проверяем, жив ли враг после атаки
                         if (!enemy.isAlive()) {
                             std::cout << "Вы победили " << enemy.getName() << "!" << std::endl;
                             pauseForDialogue();
@@ -136,108 +120,78 @@ void BattleSystem::startBattle(Character& player, Character& enemy, int round) {
                     }
                     break;
                     
-                case 2: { // Использование магии
+                case 2: {
                     uiManager.displayMagicOptions(player);
                     int spellChoice = uiManager.getPlayerChoice();
-                    playerLastChoice = 2; // Сохраняем, что игрок использовал магию
-                    playerLastSpell = spellChoice; // Сохраняем конкретное выбранное заклинание
+                    playerLastChoice = 2;
+                    playerLastSpell = spellChoice;
                     
                     if (spellChoice >= 1 && spellChoice <= 3) {
-                        // Игрок использует магию
                         bool magicUsed = castMagic(player, enemy, spellChoice);
                         
-                        // Если магия не была использована или враг погиб, пропускаем ход противника
                         if (!magicUsed) {
                             continue;
                         }
                         
-                        // Проверяем, жив ли враг после магии
-        if (!enemy.isAlive()) {
+                        if (!enemy.isAlive()) {
                             std::cout << "Вы победили " << enemy.getName() << "!" << std::endl;
                             pauseForDialogue();
                             battleContinues = false;
                             continue;
                         }
                     } else {
-                        // Если игрок выбрал возврат, пропускаем ход противника
-            continue;
+                        continue;
                     }
                     break;
                 }
                     
-                case 3: // Использование предмета
+                case 3:
                     useItem(player, enemy);
-                    continue; // Пропускаем ход противника, т.к. предмет не найден
+                    continue;
                     
-                case 4: // Выход из игры
+                case 4:
                     exitGame();
-                    continue; // Если игрок не вышел, продолжаем без хода противника
+                    continue;
                     
                 default:
                     std::cout << "Недопустимый выбор. Попробуйте еще раз." << std::endl;
                     pauseForDialogue();
-                    continue; // Пропускаем ход противника при неправильном вводе
+                    continue;
             }
         }
         
-        // Ход противника (если мы дошли до этого места, значит ход игрока был успешным)
         if (enemy.isAlive()) {
-            // Определяем следующее действие противника
             EnemyAttack enemyAction;
             
-            // Если у нас уже есть спрогнозированное действие, используем его,
-            // но при этом всё равно удаляем из списка доступных атак
             if (hasNextAction) {
-                // Запоминаем тип и мощность атаки из предсказания
-                EnemyAttackType attackType = nextEnemyAction.type;
-                std::string attackName = nextEnemyAction.name;
-                int attackPower = nextEnemyAction.power;
-                int attackCost = nextEnemyAction.cost;
-                
-                // Сбрасываем флаг, что у нас есть подсказка
+                enemyAction = nextEnemyAction;
                 hasNextAction = false;
                 
-                // Вызываем determineNextAction уже без флага предсказания,
-                // чтобы атака была удалена из списка доступных
-                enemyAction = aiController.determineNextAction(enemy, round);
-                
-                // Проверяем, соответствует ли настоящая атака предсказанной
-                // Если нет, используем предсказанную атаку и вручную тратим ману
-                if (enemyAction.type != attackType) {
-                    enemyAction = {attackType, attackName, attackPower, attackCost};
-                    enemy.useMana(attackCost);
-                }
+                aiController.determineNextAction(enemy, round, false);
             } else {
-                enemyAction = aiController.determineNextAction(enemy, round);
+                enemyAction = aiController.determineNextAction(enemy, round, false);
             }
             
-            // Выполняем действие
             executeEnemyAction(player, enemy, enemyAction, playerLastChoice, playerLastSpell);
             
-            // Проверяем, жив ли игрок после хода противника
             if (!player.isAlive()) {
                 std::cout << "Вы проиграли! " << enemy.getName() << " победил вас!" << std::endl;
                 pauseForDialogue();
                 battleContinues = false;
             } else {
-                // Определяем следующее действие противника для подсказки
-                nextEnemyAction = aiController.determineNextAction(enemy, round, true); // true - только предсказание
+                nextEnemyAction = aiController.determineNextAction(enemy, round, true);
                 hasNextAction = true;
             }
             
-            // Обновляем активные баффы в конце каждого хода
             updateBuffs(player);
         }
     }
     
-    // Покажем конечное сообщение
     std::string result = (player.isAlive()) ? "Вы победили!" : "Вы проиграли!";
     uiManager.displayBattleResult(result);
 }
 
 void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const EnemyAttack& action, int playerLastChoice, int playerLastSpell) {
-    // Фразы для различных типов атак
-    // Фразы Дэна при обычной атаке
     std::vector<std::string> normalAttackPhrases = {
         "Получай! *наносит прямой удар*",
         "Этот удар ты почувствуешь! *проводит резкую атаку*",
@@ -251,7 +205,6 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
         "Защищайся, если сможешь! *наступает с мощной атакой*"
     };
     
-    // Фразы Дэна при атаке с уклонением
     std::vector<std::string> dodgeAttackPhrases = {
         "Слишком предсказуемо! *легко уходит от вашей атаки*",
         "Я читаю твои движения как открытую книгу! *уклоняется с усмешкой*",
@@ -265,7 +218,6 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
         "Ты никогда меня не поймаешь! *скользит вокруг вас*"
     };
     
-    // Фразы Дэна при удачном оглушении игрока
     std::vector<std::string> stunAttackPhrases = {
         "Спокойной ночи! *наносит сокрушительный удар*",
         "Отдохни немного! *атакует в уязвимую точку*",
@@ -279,7 +231,6 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
         "Ты еще долго будешь это чувствовать! *смотрит на вас сверху вниз*"
     };
     
-    // Фразы Дэна при успешной блокировке оглушения игроком
     std::vector<std::string> playerBlockedStunPhrases = {
         "Неплохо... для новичка! *недовольно хмурится*",
         "Так ты все-таки кое-что умеешь! *выглядит заинтересованным*",
@@ -293,7 +244,6 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
         "Впечатляет! Но мой арсенал только начинается! *широко улыбается*"
     };
     
-    // Фразы Дэна при успешном уклонении игрока от его атаки
     std::vector<std::string> playerDodgedPhrases = {
         "Шустрый, ничего не скажешь! *выглядит раздраженно*",
         "Повезло! *пытается скрыть удивление*",
@@ -307,7 +257,6 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
         "Учишься на ходу? Похвально! *кивает с одобрением*"
     };
     
-    // Фразы Дэна при пропуске хода
     std::vector<std::string> skipTurnPhrases = {
         "Нужно перевести дыхание... *тяжело дышит*",
         "Я позволю тебе атаковать. *отступает*",
@@ -321,42 +270,34 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
         "Стратегическое отступление... ненадолго. *переводит дыхание*"
     };
     
-    // Выбор случайной фразы в зависимости от типа атаки
     std::random_device rd;
     std::mt19937 gen(rd());
     
     switch (action.type) {
         case EnemyAttackType::NORMAL_ATTACK:
             {
-                // Выбор случайной фразы для обычной атаки
                 std::uniform_int_distribution<> distrib(0, normalAttackPhrases.size() - 1);
                 std::cout << enemy.getName() << ": \"" << normalAttackPhrases[distrib(gen)] << "\"" << std::endl;
                 
-                // Пауза с коротким таймером для фразы
                 #ifdef _WIN32
                 Sleep(dialoguePauseDuration / 2);
                 #else
                 usleep((dialoguePauseDuration / 2) * 1000);
                 #endif
                 
-                // Обычная атака, наносит урон
                 int damage = action.power;
                 player.takeDamage(damage);
                 std::cout << enemy.getName() << " атакует вас!" << std::endl;
                 
-                // Добавляем паузу после атаки
                 pauseForDialogue();
             }
             break;
             
         case EnemyAttackType::DODGE_ATTACK:
             {
-                // Атака на уклонение - наносит двойной урон, если игрок не использовал телепортацию
-                // Проверяем, использовал ли игрок именно телепортацию (заклинание 3), а не любую магию
                 bool dodged = (playerLastChoice == 2 && playerLastSpell == 3 && player.useMana(-20));
                 
                 if (dodged) {
-                    // Фразы Дэна при успешном уклонении игрока с помощью телепортации
                     std::vector<std::string> playerTeleportedPhrases = {
                         "Телепортация? Умный ход... *удивленно поднимает бровь*",
                         "Так это и есть твоя магия? Неплохо... *внимательно следит за вами*",
@@ -370,23 +311,19 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
                         "Твоя телепортация действительно работает против меня... *неохотно признает*"
                     };
                     
-                    // Выбор фразы при успешном использовании телепортации
                     std::uniform_int_distribution<> distrib(0, playerTeleportedPhrases.size() - 1);
                     std::cout << enemy.getName() << ": \"" << playerTeleportedPhrases[distrib(gen)] << "\"" << std::endl;
                     
-                    // Пауза с коротким таймером для фразы
                     #ifdef _WIN32
                     Sleep(dialoguePauseDuration / 2);
                     #else
                     usleep((dialoguePauseDuration / 2) * 1000);
                     #endif
                     
-                    // Игрок успешно уклонился
-                    int damage = action.power / 4; // Сниженный урон
+                    int damage = action.power / 4;
                     player.takeDamage(damage);
                     std::cout << enemy.getName() << " пытается сбить вас с ног, но ваша телепортация срабатывает!" << std::endl;
                 } else {
-                    // Общие фразы насмешки без упоминания телепортации, когда игрок не уклонился
                     std::vector<std::string> playerFailedDodgePhrases = {
                         "Слишком медленно! *легко обходит вашу защиту*",
                         "Я читаю твои движения как открытую книгу! *наносит точный удар*",
@@ -400,62 +337,51 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
                         "Ты никогда не сможешь меня обмануть! *безошибочно находит брешь в защите*"
                     };
                     
-                    // Выбор фразы при неудачном уклонении игрока
                     std::uniform_int_distribution<> distrib(0, playerFailedDodgePhrases.size() - 1);
                     std::cout << enemy.getName() << ": \"" << playerFailedDodgePhrases[distrib(gen)] << "\" *смеется*" << std::endl;
                     
-                    // Пауза с коротким таймером для фразы
                     #ifdef _WIN32
                     Sleep(dialoguePauseDuration / 2);
                     #else
                     usleep((dialoguePauseDuration / 2) * 1000);
                     #endif
                     
-                    // Игрок не уклонился - получает двойной урон
                     int damage = action.power * 2;
                     player.takeDamage(damage);
                     std::cout << enemy.getName() << " застигает вас врасплох!" << std::endl;
                 }
                 
-                // Добавляем паузу после атаки
                 pauseForDialogue();
             }
             break;
             
         case EnemyAttackType::STUN_ATTACK:
             {
-                // Атака-оглушение - можно заблокировать только ледяным щитом
-                bool blocked = (playerLastChoice == 2 && player.useMana(-10)); // Проверяем, использовал ли игрок щит
+                bool blocked = (playerLastChoice == 2 && player.useMana(-10));
                 
                 if (blocked) {
-                    // Выбор фразы при успешном блокировании оглушения
                     std::uniform_int_distribution<> distrib(0, playerBlockedStunPhrases.size() - 1);
                     std::cout << enemy.getName() << ": \"" << playerBlockedStunPhrases[distrib(gen)] << "\"" << std::endl;
                     
-                    // Пауза с коротким таймером для фразы
                     #ifdef _WIN32
                     Sleep(dialoguePauseDuration / 2);
                     #else
                     usleep((dialoguePauseDuration / 2) * 1000);
                     #endif
                     
-                    // Игрок успешно заблокировал оглушение
                     int damage = action.power;
                     player.takeDamage(damage);
                     std::cout << enemy.getName() << " пытается оглушить вас, но ледяной щит блокирует эффект!" << std::endl;
                 } else {
-                    // Выбор фразы при успешном оглушении
                     std::uniform_int_distribution<> distrib(0, stunAttackPhrases.size() - 1);
                     std::cout << enemy.getName() << ": \"" << stunAttackPhrases[distrib(gen)] << "\" *смеется над вами*" << std::endl;
                     
-                    // Пауза с коротким таймером для фразы
                     #ifdef _WIN32
                     Sleep(dialoguePauseDuration / 2);
                     #else
                     usleep((dialoguePauseDuration / 2) * 1000);
                     #endif
                     
-                    // Игрок оглушен
                     int damage = action.power * 5;
                     player.takeDamage(damage);
                     playerStunned = true;
@@ -464,27 +390,22 @@ void BattleSystem::executeEnemyAction(Character& player, Character& enemy, const
                     std::cout << "Вы оглушены и пропустите " << playerStunDuration << " ход(а)." << std::endl;
                 }
                 
-                // Добавляем паузу после атаки
                 pauseForDialogue();
             }
             break;
             
         case EnemyAttackType::SKIP_TURN:
-            // Пропуск хода (нет действий)
-            // Выбор случайной фразы
             std::uniform_int_distribution<> distrib(0, skipTurnPhrases.size() - 1);
             std::cout << enemy.getName() << ": \"" << skipTurnPhrases[distrib(gen)] << "\"" << std::endl;
             
             std::cout << enemy.getName() << " пропускает ход." << std::endl;
             
-            // Добавляем паузу после фразы
             pauseForDialogue();
             break;
     }
 }
 
 void BattleSystem::processPlayerTurn(Character& player, Character& enemy) {
-    // Отображаем доступные действия после боевого экрана
     std::cout << "Доступные действия:" << std::endl;
     std::cout << "1. Атаковать оружием" << std::endl;
     std::cout << "2. Использовать магию" << std::endl;
@@ -497,10 +418,10 @@ void BattleSystem::processPlayerTurn(Character& player, Character& enemy) {
     int choice = uiManager.getPlayerChoice();
     
     switch(choice) {
-        case 1: // Обычная атака
+        case 1:
             attackEnemy(player, enemy);
             break;
-        case 2: { // Использование магии - добавляем блок скоупа
+        case 2: {
             uiManager.displayMagicOptions(player);
             int spellChoice = uiManager.getPlayerChoice();
             if (spellChoice >= 1 && spellChoice <= 3) {
@@ -508,13 +429,13 @@ void BattleSystem::processPlayerTurn(Character& player, Character& enemy) {
             }
             break;
         }
-        case 3: // Использование предмета
+        case 3:
             useItem(player, enemy);
             break;
-        case 4: // Информация о враге
+        case 4:
             showEnemyInfo(enemy);
             break;
-        case 5: // Выход из игры
+        case 5:
             exitGame();
             break;
         default:
@@ -530,7 +451,6 @@ void BattleSystem::attackEnemy(Character& player, Character& enemy) {
     
     std::cout << "Вы атакуете " << enemy.getName() << "!" << std::endl;
     
-    // Фразы Дэна в ответ на атаку игрока
     std::vector<std::string> enemyResponseToAttack = {
         "Это всё, на что ты способен? *отряхивает пыль с плеча*",
         "Ты называешь это ударом? *насмешливо смотрит*",
@@ -544,20 +464,16 @@ void BattleSystem::attackEnemy(Character& player, Character& enemy) {
         "Смешная попытка, но недостаточно! *принимает боевую стойку*"
     };
     
-    // Выбор случайной фразы
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> distrib(0, enemyResponseToAttack.size() - 1);
     
-    // Выводим фразу противника
     std::cout << "\n" << enemy.getName() << ": \"" << enemyResponseToAttack[distrib(gen)] << "\"" << std::endl;
     
-    // Добавляем паузу после фразы
     pauseForDialogue();
 }
 
 void BattleSystem::useMagic(Character& player, Character& enemy, int spellChoice) {
-    // Проверяем, есть ли у игрока мана
     if (!player.doesHaveMana() || player.getMana() <= 0) {
         std::cout << "У вас недостаточно маны!" << std::endl;
         pauseForDialogue();
@@ -565,11 +481,10 @@ void BattleSystem::useMagic(Character& player, Character& enemy, int spellChoice
     }
     
     switch (spellChoice) {
-        case 1: // Огненный шар
-            if (player.useMana(15)) {
+        case 1:
+            if (player.useMana(10)) {
                 std::cout << "Вы создаете огненный шар!" << std::endl;
-                // Используем атаку персонажа для увеличения урона
-                int damage = 15 + player.getAttack() / 2;
+                int damage = 15 + player.getAttack();
                 std::cout << "Огненный шар наносит " << damage << " урона!" << std::endl;
                 enemy.takeDamage(damage);
                 pauseForDialogue();
@@ -579,11 +494,11 @@ void BattleSystem::useMagic(Character& player, Character& enemy, int spellChoice
             }
             break;
             
-        case 2: // Ледяной щит
-            if (player.useMana(10)) {
+        case 2:
+            if (player.useMana(8)) {
                 std::cout << "Вы создаете ледяной щит вокруг себя!" << std::endl;
-                std::cout << "Ваша защита увеличена на 10!" << std::endl;
-                player.boostDefense(10);
+                std::cout << "Ваша защита увеличена на 8!" << std::endl;
+                player.boostDefense(8);
                 pauseForDialogue();
             } else {
                 std::cout << "Недостаточно маны для ледяного щита!" << std::endl;
@@ -591,12 +506,11 @@ void BattleSystem::useMagic(Character& player, Character& enemy, int spellChoice
             }
             break;
             
-        case 3: // Телепортация
-            if (player.useMana(20)) {
+        case 3:
+            if (player.useMana(12)) {
                 std::cout << "Вы телепортируетесь, избегая вражеской атаки!" << std::endl;
-                // Добавляем лечение 20 HP при телепортации
-                std::cout << "Телепортация восстанавливает вам 20 здоровья!" << std::endl;
-                player.heal(20);
+                std::cout << "Телепортация восстанавливает вам 15 здоровья!" << std::endl;
+                player.heal(15);
                 pauseForDialogue();
             } else {
                 std::cout << "Недостаточно маны для телепортации!" << std::endl;
@@ -611,19 +525,15 @@ void BattleSystem::useMagic(Character& player, Character& enemy, int spellChoice
     }
 }
 
-// Метод использования предмета
 void BattleSystem::useItem(Character& player, Character& enemy) {
-    // Получаем инвентарь игрока
     const auto& inventory = player.getInventory();
     
-    // Проверяем, есть ли у игрока предметы
     if (inventory.empty()) {
         std::cout << "У вас нет предметов для использования." << std::endl;
         pauseForDialogue();
         return;
     }
     
-    // Отображаем инвентарь
     std::cout << "\nДоступные предметы:" << std::endl;
     for (size_t i = 0; i < inventory.size(); i++) {
         std::cout << (i + 1) << ". " << inventory[i].name 
@@ -631,118 +541,34 @@ void BattleSystem::useItem(Character& player, Character& enemy) {
     }
     std::cout << (inventory.size() + 1) << ". Вернуться назад" << std::endl;
     
-    // Получаем выбор игрока
     int choice = uiManager.getPlayerChoice();
     
-    // Проверяем, что выбор валидный
     if (choice >= 1 && choice <= static_cast<int>(inventory.size())) {
-        // Индекс выбранного предмета
         int itemIndex = choice - 1;
         const Item& selectedItem = inventory[itemIndex];
         
-        // Применяем эффект предмета
-        if (selectedItem.name.find("зелье здоровья") != std::string::npos) {
-            // Извлекаем число из описания
-            std::string valueStr = selectedItem.description.substr(
-                selectedItem.description.find_last_of(' ') + 1, 
-                selectedItem.description.find("HP") - selectedItem.description.find_last_of(' ') - 1
-            );
-            int healValue = std::stoi(valueStr);
-            
-            // Применяем эффект зелья здоровья
-            player.heal(healValue);
-            std::cout << "Вы использовали " << selectedItem.name << " и восстановили " 
-                      << healValue << " здоровья!" << std::endl;
-        }
-        else if (selectedItem.name.find("зелье маны") != std::string::npos) {
-            // Извлекаем число из описания
-            std::string valueStr = selectedItem.description.substr(
-                selectedItem.description.find_last_of(' ') + 1, 
-                selectedItem.description.find("MP") - selectedItem.description.find_last_of(' ') - 1
-            );
-            int manaValue = std::stoi(valueStr);
-            
-            // Применяем эффект зелья маны
-            player.useMana(-manaValue); // Отрицательное значение восстанавливает ману
-            std::cout << "Вы использовали " << selectedItem.name << " и восстановили " 
-                      << manaValue << " маны!" << std::endl;
-        }
-        else if (selectedItem.name == "Зелье силы") {
-            // Добавляем бафф атаки
-            activeBuffs.push_back(ActiveBuff(selectedItem.name, 10, 0, 0, 0, 3));
-            player.boostAttack(10);
-            std::cout << "Вы использовали Зелье силы! Ваша атака увеличена на 10 на 3 хода." << std::endl;
-        }
-        else if (selectedItem.name == "Эликсир защиты") {
-            // Добавляем бафф защиты
-            activeBuffs.push_back(ActiveBuff(selectedItem.name, 0, 15, 0, 0, 3));
-            player.boostDefense(15);
-            std::cout << "Вы использовали Эликсир защиты! Ваша защита увеличена на 15 на 3 хода." << std::endl;
-        }
-        else if (selectedItem.name == "Зелье регенерации") {
-            // Добавляем бафф регенерации здоровья
-            activeBuffs.push_back(ActiveBuff(selectedItem.name, 0, 0, 10, 0, 3));
-            std::cout << "Вы использовали Зелье регенерации! Вы будете восстанавливать 10 HP каждый ход в течение 3 ходов." << std::endl;
-        }
-        else if (selectedItem.name == "Зелье маны") {
-            // Добавляем бафф регенерации маны
-            activeBuffs.push_back(ActiveBuff(selectedItem.name, 0, 0, 0, 5, 3));
-            std::cout << "Вы использовали Зелье маны! Вы будете восстанавливать 5 MP каждый ход в течение 3 ходов." << std::endl;
-        }
-        else if (selectedItem.name == "Эликсир ярости") {
-            // Добавляем бафф атаки с дебаффом защиты
-            activeBuffs.push_back(ActiveBuff(selectedItem.name, 20, -10, 0, 0, 2));
-            player.boostAttack(20);
-            player.boostDefense(-10);
-            std::cout << "Вы использовали Эликсир ярости! Ваша атака увеличена на 20, но защита снижена на 10 на 2 хода." << std::endl;
-        }
-        else if (selectedItem.name == "Зелье берсерка") {
-            // Добавляем бафф атаки и здоровья
-            activeBuffs.push_back(ActiveBuff(selectedItem.name, 15, 0, 0, 0, 3));
-            player.boostAttack(15);
-            player.boostHealth(10);
-            std::cout << "Вы использовали Зелье берсерка! Ваша атака увеличена на 15, а максимальное здоровье на 10 на 3 хода." << std::endl;
-        }
-        else if (selectedItem.name == "Зелье хаоса") {
-            // Случайный бафф
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<> distrib(0, 2);
-            int randStat = distrib(gen);
-            
-            if (randStat == 0) {
-                activeBuffs.push_back(ActiveBuff(selectedItem.name, 25, 0, 0, 0, 2));
-                player.boostAttack(25);
-                std::cout << "Вы использовали Зелье хаоса! Случайный эффект: ваша атака увеличена на 25 на 2 хода." << std::endl;
-            } else if (randStat == 1) {
-                activeBuffs.push_back(ActiveBuff(selectedItem.name, 0, 25, 0, 0, 2));
-                player.boostDefense(25);
-                std::cout << "Вы использовали Зелье хаоса! Случайный эффект: ваша защита увеличена на 25 на 2 хода." << std::endl;
-            } else {
-                activeBuffs.push_back(ActiveBuff(selectedItem.name, 0, 0, 25, 0, 2));
-                player.heal(25);
-                std::cout << "Вы использовали Зелье хаоса! Случайный эффект: вы восстановили 25 здоровья и получите еще 25 в следующем ходу." << std::endl;
-            }
-        }
-        else if (selectedItem.name == "Зелье медитации") {
-            // Полное восстановление маны, но пропуск хода
-            player.useMana(-player.getMaxMana()); // Полностью восстанавливаем ману
+        // Проверяем, является ли предмет зельем медитации
+        bool isMeditationPotion = (selectedItem.name == "Зелье медитации");
+        
+        // Используем систему зелий вместо прямой логики
+        bool potionUsed = potionSystem.usePotion(player, selectedItem);
+        
+        // Если это было зелье медитации, устанавливаем оглушение
+        if (potionUsed && isMeditationPotion) {
             playerStunned = true;
             playerStunDuration = 1;
-            std::cout << "Вы использовали Зелье медитации! Ваша мана полностью восстановлена, но вы пропустите следующий ход." << std::endl;
-        }
-        else {
-            std::cout << "Этот предмет пока не реализован." << std::endl;
         }
         
-        // Удаляем использованный предмет из инвентаря
-        player.removeFromInventory(itemIndex);
+        if (potionUsed) {
+            // Удаляем предмет из инвентаря
+            InventorySystem inventorySystem(uiManager);
+            inventorySystem.removeItem(player, itemIndex);
+        }
         
         pauseForDialogue();
         return;
     }
     else if (choice == inventory.size() + 1) {
-        // Возврат в меню боя
         return;
     }
     else {
@@ -751,65 +577,9 @@ void BattleSystem::useItem(Character& player, Character& enemy) {
     }
 }
 
-// Метод для обновления баффов в конце хода
 void BattleSystem::updateBuffs(Character& player) {
-    // Безопасная проверка перед обработкой баффов
-    try {
-        // Проверяем, существует ли вектор и не пустой ли он
-        if (activeBuffs.empty()) {
-            return;
-        }
-        
-        std::cout << "\nАктивные эффекты:" << std::endl;
-        
-        // Проходим по всем активным баффам
-        for (auto it = activeBuffs.begin(); it != activeBuffs.end(); ) {
-            // Дополнительная проверка валидности итератора
-            if (it == activeBuffs.end()) {
-                break;
-            }
-            
-            // Применяем эффекты регенерации
-            if (it->healthRegen > 0) {
-                player.heal(it->healthRegen);
-                std::cout << "Эффект " << it->name << " восстанавливает " << it->healthRegen << " HP!" << std::endl;
-            }
-            
-            if (it->manaRegen > 0 && player.doesHaveMana()) {
-                player.useMana(-it->manaRegen);
-                std::cout << "Эффект " << it->name << " восстанавливает " << it->manaRegen << " MP!" << std::endl;
-            }
-            
-            // Уменьшаем длительность
-            it->duration--;
-            
-            // Если бафф закончился, отменяем его эффект и удаляем
-            if (it->duration <= 0) {
-                std::cout << "Эффект " << it->name << " закончился!" << std::endl;
-                
-                // Отменяем баффы атаки и защиты
-                if (it->attackBonus != 0) {
-                    player.boostAttack(-it->attackBonus);
-                }
-                
-                if (it->defenseBonus != 0) {
-                    player.boostDefense(-it->defenseBonus);
-                }
-                
-                // Удаляем бафф из списка
-                it = activeBuffs.erase(it);
-            } else {
-                std::cout << "Эффект " << it->name << " действует еще " << it->duration << " ход(ов)." << std::endl;
-                ++it;
-            }
-        }
-        
-        pauseForDialogue();
-    } catch (const std::exception& e) {
-        // В случае ошибки просто завершаем функцию без падения
-        std::cout << "Ошибка при обработке эффектов." << std::endl;
-        return;
-    }
+    // Используем BuffSystem вместо прямой логики обновления эффектов
+    buffSystem.updateBuffs(player);
 }
 
 void BattleSystem::showEnemyInfo(const Character& enemy) {
@@ -819,30 +589,23 @@ void BattleSystem::showEnemyInfo(const Character& enemy) {
     std::cout << "Атака: " << enemy.getAttack() << std::endl;
     std::cout << "Очки действий: " << enemy.getMana() << std::endl;
     
-    // Небольшая задержка перед возвратом
     pauseForDialogue();
 }
 
 int BattleSystem::calculateDamage(const Character& attacker, const Character& defender) {
-    // Базовая формула урона: базовый урон + атака атакующего
-    int baseDamage = 10;
-    int rawDamage = baseDamage + attacker.getAttack();
+    int baseDamage = attacker.getAttack();
+    int defenderDefense = defender.getDefense();
     
-    // Новая механика брони: 
-    // Броня снижает урон на процент: каждые 10 единиц защиты снижают урон на 10%
-    // Но не более чем на 70% от исходного урона
-    double defensePercent = defender.getDefense() * 0.01; // 1% за каждую единицу защиты
+    // Усиливаем базовый урон для более быстрой битвы
+    int damage = baseDamage * 1.5 - defenderDefense;
     
-    // Ограничиваем максимальное снижение урона до 70%
-    if (defensePercent > 0.7) defensePercent = 0.7;
+    // Добавляем случайный элемент для неожиданных исходов
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> damageVariation(-2, 5);
+    damage += damageVariation(gen);
     
-    // Вычисляем итоговый урон с учетом брони
-    int finalDamage = static_cast<int>(rawDamage * (1.0 - defensePercent));
-    
-    // Минимальный урон всегда 5
-    if (finalDamage < 5) finalDamage = 5;
-    
-    return finalDamage;
+    return (damage < 1) ? 1 : damage;
 }
 
 void BattleSystem::exitGame() {
@@ -863,16 +626,13 @@ void BattleSystem::clearScreen() {
     #endif
 }
 
-// Метод для применения магии с возвратом результата успешности
 bool BattleSystem::castMagic(Character& player, Character& enemy, int spellChoice) {
-    // Проверяем, есть ли у игрока мана
     if (!player.doesHaveMana() || player.getMana() <= 0) {
         std::cout << "У вас недостаточно маны!" << std::endl;
         pauseForDialogue();
         return false;
     }
     
-    // Фразы Дэна в ответ на магию игрока
     std::vector<std::string> enemyResponseToFireball = {
         "Ты думаешь огонь меня остановит? Наивно! *отряхивает пепел*",
         "Неплохой фокус, но мне не жарко! *гасит пламя*",
@@ -912,24 +672,20 @@ bool BattleSystem::castMagic(Character& player, Character& enemy, int spellChoic
         "Твои трюки с пространством меня только забавляют! *приближается к вам*"
     };
     
-    // Выбор случайной фразы
     std::random_device rd;
     std::mt19937 gen(rd());
     
     switch (spellChoice) {
-        case 1: // Огненный шар
+        case 1:
             if (player.useMana(15)) {
-                // Используем атаку персонажа для увеличения урона
                 int damage = 15 + player.getAttack() / 2;
                 enemy.takeDamage(damage);
                 
                 std::cout << "Вы создаете огненный шар и запускаете его в противника!" << std::endl;
                 
-                // Выводим фразу противника
                 std::uniform_int_distribution<> distrib(0, enemyResponseToFireball.size() - 1);
                 std::cout << "\n" << enemy.getName() << ": \"" << enemyResponseToFireball[distrib(gen)] << "\"" << std::endl;
                 
-                // Добавляем паузу после фразы
                 pauseForDialogue();
                 
                 return true;
@@ -940,17 +696,15 @@ bool BattleSystem::castMagic(Character& player, Character& enemy, int spellChoic
             }
             break;
             
-        case 2: // Ледяной щит
+        case 2:
             if (player.useMana(10)) {
                 player.boostDefense(10);
                 
                 std::cout << "Вы создаете ледяной щит вокруг себя!" << std::endl;
                 
-                // Выводим фразу противника
                 std::uniform_int_distribution<> distrib(0, enemyResponseToIceShield.size() - 1);
                 std::cout << "\n" << enemy.getName() << ": \"" << enemyResponseToIceShield[distrib(gen)] << "\"" << std::endl;
                 
-                // Добавляем паузу после фразы
                 pauseForDialogue();
                 
                 return true;
@@ -961,17 +715,15 @@ bool BattleSystem::castMagic(Character& player, Character& enemy, int spellChoic
             }
             break;
             
-        case 3: // Телепортация
+        case 3:
             if (player.useMana(20)) {
                 player.heal(20);
                 
                 std::cout << "Вы телепортируетесь, избегая вражеской атаки и восстанавливая силы!" << std::endl;
                 
-                // Выводим фразу противника
                 std::uniform_int_distribution<> distrib(0, enemyResponseToTeleport.size() - 1);
                 std::cout << "\n" << enemy.getName() << ": \"" << enemyResponseToTeleport[distrib(gen)] << "\"" << std::endl;
                 
-                // Добавляем паузу после фразы
                 pauseForDialogue();
                 
                 return true;
@@ -989,20 +741,16 @@ bool BattleSystem::castMagic(Character& player, Character& enemy, int spellChoic
             break;
     }
     
-    return false; // Не должны дойти сюда, но на всякий случай
+    return false;
 }
 
-// Добавляем новый метод для отображения статистики атак
 void BattleSystem::displayEnemyAttackStats() {
-    // Получаем доступные атаки от AIController
     std::vector<EnemyAttack> availableAttacks = aiController.getAvailableAttacks();
     
-    // Счетчики для каждого типа атак
     int normalAttackCount = 0;
     int dodgeAttackCount = 0;
     int stunAttackCount = 0;
     
-    // Подсчитываем количество каждого типа атак
     for (const auto& attack : availableAttacks) {
         switch (attack.type) {
             case EnemyAttackType::NORMAL_ATTACK:
@@ -1019,7 +767,6 @@ void BattleSystem::displayEnemyAttackStats() {
         }
     }
     
-    // Отображаем статистику с улучшенным форматированием
     std::cout << "\n------------------------------------------------" << std::endl;
     std::cout << "Оставшиеся атаки Дэна:" << std::endl;
     std::cout << "  • Обычные атаки: " << normalAttackCount << std::endl;
@@ -1028,9 +775,7 @@ void BattleSystem::displayEnemyAttackStats() {
     std::cout << "------------------------------------------------" << std::endl;
 }
 
-// Метод для отображения намека на действие противника
 void BattleSystem::displayEnemyHint(const EnemyAttack& nextAction) {
-    // Фразы-намеки на действия Дэна в следующем ходу
     std::vector<std::string> normalAttackHints = {
         "Дэн собирается с силами для простой атаки.",
         "Дэн принимает стандартную боевую стойку для атаки.",
@@ -1083,7 +828,6 @@ void BattleSystem::displayEnemyHint(const EnemyAttack& nextAction) {
         "Дэн сбрасывает напряжение в мышцах. Он не готов к следующей атаке."
     };
     
-    // Выбор случайной фразы-намека в зависимости от типа действия
     std::random_device rd;
     std::mt19937 gen(rd());
     
@@ -1114,6 +858,132 @@ void BattleSystem::displayEnemyHint(const EnemyAttack& nextAction) {
     
     std::cout << "\n";
     
-    // Добавляем паузу после намека, чтобы игрок успел его прочитать
     pauseForDialogue();
+}
+
+void BattleSystem::executePlayerTurn(Character& player, Character& enemy, int playerChoice, int& playerLastChoice, int& playerLastSpell, int currentRound) {
+    playerLastChoice = playerChoice;
+    
+    if (playerChoice == 1) {
+        // обычная атака
+        int playerDamage = calculateDamage(player, enemy);
+        enemy.takeDamage(playerDamage);
+        
+        displayEnemyResponseToAttack(enemy, true, playerDamage);
+        
+    } else if (playerChoice == 2) {
+        // магия
+        uiManager.displayMagicOptions(player);
+        int spellChoice = uiManager.getPlayerChoice();
+        
+        playerLastSpell = spellChoice;
+        
+        if (castMagic(player, enemy, spellChoice)) {
+            displayEnemyResponseToDodge(enemy, (spellChoice == 3), playerLastSpell);
+        }
+        
+    } else if (playerChoice == 3) {
+        // предметы
+        useItem(player, enemy);
+        
+    } else {
+        // неверный ввод
+        std::cout << "Неверный выбор! Вы пропускаете ход." << std::endl;
+        pauseForDialogue();
+    }
+    
+    EnemyAttack nextAction = aiController.determineNextAction(enemy, currentRound);
+    executeEnemyAction(player, enemy, nextAction, playerLastChoice, playerLastSpell);
+}
+
+void BattleSystem::displayEnemyResponseToAttack(Character& enemy, bool successfulAttack, int damage) {
+    std::vector<std::string> enemyResponseToAttack = {
+        "Это всё, на что ты способен? *отряхивает пыль с плеча*",
+        "Ты называешь это ударом? *насмешливо смотрит*",
+        "Я даже не почувствовал! *делает вид, что зевает*",
+        "Мои тренировки не прошли даром... *блокирует большую часть удара*",
+        "Ха, в следующий раз попробуй сильнее! *потирает место удара*",
+        "Это щекотка, а не атака! *смеется над вашей попыткой*",
+        "Твой меч ощущается как зубочистка! *демонстративно отряхивается*",
+        "Моя бабушка била сильнее! *показывает, что ему не больно*",
+        "И ради этого ты так долго готовился? *смотрит с разочарованием*",
+        "Смешная попытка, но недостаточно! *принимает боевую стойку*"
+    };
+    
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(0, enemyResponseToAttack.size() - 1);
+    
+    std::cout << "\nВы нанесли " << damage << " урона!" << std::endl;
+    std::cout << enemy.getName() << ": \"" << enemyResponseToAttack[distrib(gen)] << "\"" << std::endl;
+    
+    pauseForDialogue();
+}
+
+void BattleSystem::displayEnemyResponseToDodge(Character& enemy, bool playerDodged, int playerLastSpell) {
+    if (playerDodged) {
+        std::vector<std::string> enemyResponseToTeleport = {
+            "Бегство? Какая трусость! *ищет вас взглядом*",
+            "Ты можешь бежать, но не спрячешься! *поворачивается в вашу сторону*",
+            "Телепортация? Впечатляюще, но бесполезно. *улыбается, увидев вас*",
+            "Не думал, что будешь убегать... *готовится к следующей атаке*",
+            "Даже магия перемещения не спасёт тебя от меня! *следит за вашим перемещением*",
+            "Быстрые ноги — но куда они тебя приведут? *впечатлен, но не смущен*",
+            "Исчезаешь? Это искусство трусов! *презрительно смотрит*",
+            "Я найду тебя в любом уголке арены! *внимательно следит за вами*",
+            "Пространство не защитит тебя от моего гнева! *сужает глаза*",
+            "Твои трюки с пространством меня только забавляют! *приближается к вам*"
+        };
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> distrib(0, enemyResponseToTeleport.size() - 1);
+        
+        std::cout << enemy.getName() << ": \"" << enemyResponseToTeleport[distrib(gen)] << "\"" << std::endl;
+        pauseForDialogue();
+    }
+}
+
+void BattleSystem::displayEnemyResponseToStun(Character& enemy, bool playerStunned) {
+    if (playerStunned) {
+        std::vector<std::string> stunSuccessResponses = {
+            "Сладких снов! *смеется над вашей беспомощностью*",
+            "Наслаждайся отдыхом! *готовится к следующей атаке*",
+            "Ты даже защититься толком не можешь! *смотрит с презрением*",
+            "Как это? Голова кружится? *насмешливо улыбается*",
+            "Вот это я понимаю - эффективный удар! *гордо выпрямляется*",
+            "Теперь ты знаешь, что такое настоящая боль! *наблюдает за вашим замешательством*",
+            "И это всё? Я ожидал большего сопротивления! *разочарованно качает головой*",
+            "Не волнуйся, это ненадолго... твоя боль только начинается! *зловеще ухмыляется*",
+            "Мне даже стало немного жаль тебя. Ключевое слово - немного! *смеется*",
+            "Вот так легко развеялись все твои надежды! *торжествующе смотрит*"
+        };
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> distrib(0, stunSuccessResponses.size() - 1);
+        
+        std::cout << enemy.getName() << ": \"" << stunSuccessResponses[distrib(gen)] << "\"" << std::endl;
+        pauseForDialogue();
+    } else {
+        std::vector<std::string> stunFailedResponses = {
+            "Как тебе удалось устоять? *выглядит удивленным*",
+            "Интересно... обычно этот удар сбивает с ног! *внимательно изучает вас*",
+            "Должно быть, у тебя крепкая голова! *хмурится*",
+            "Я недооценил тебя, но это временно! *перестраивает тактику*",
+            "Необычная стойкость... *задумчиво смотрит*",
+            "В следующий раз я ударю сильнее! *обещает с угрозой*",
+            "Щит? Или просто удача? В любом случае, она скоро закончится! *сжимает кулаки*",
+            "Мало кто выдерживает этот удар... *проявляет уважение*",
+            "Возможно, ты не так слаб, как кажешься! *оценивающе смотрит*",
+            "Впечатляюще... но это тебе не поможет! *готовится к новой атаке*"
+        };
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> distrib(0, stunFailedResponses.size() - 1);
+        
+        std::cout << enemy.getName() << ": \"" << stunFailedResponses[distrib(gen)] << "\"" << std::endl;
+        pauseForDialogue();
+    }
 } 

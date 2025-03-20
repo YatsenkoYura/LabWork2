@@ -1,6 +1,5 @@
 #include "Character.h"
 
-// Конструкторы
 Character::Character() 
     : name(""), health(100), maxHealth(100), defense(10), 
       attack(10), mana(50), maxMana(50), gold(0), hasMana(true) {
@@ -11,7 +10,6 @@ Character::Character(const std::string& name, int hp, int def, int mp, bool hasM
       attack(atk), mana(mp), maxMana(mp), gold(0), hasMana(hasMp) {
 }
 
-// Методы для получения информации о персонаже
 std::string Character::getName() const {
     return name;
 }
@@ -52,7 +50,6 @@ bool Character::isAlive() const {
     return health > 0;
 }
 
-// Методы для изменения состояния персонажа
 void Character::takeDamage(int amount) {
     health -= amount;
     if (health < 0) {
@@ -62,11 +59,11 @@ void Character::takeDamage(int amount) {
 
 bool Character::useMana(int amount) {
     if (!hasMana || (amount > 0 && amount > mana)) {
-        return false; // Недостаточно маны или нет маны вообще
+        return false;
     }
-    mana -= amount; // Отрицательное значение восстанавливает ману
+    mana -= amount;
     if (mana > maxMana) {
-        mana = maxMana; // Не больше максимума
+        mana = maxMana;
     }
     return true;
 }
@@ -74,11 +71,10 @@ bool Character::useMana(int amount) {
 void Character::heal(int amount) {
     health += amount;
     if (health > maxHealth) {
-        health = maxHealth; // Не больше максимума
+        health = maxHealth;
     }
 }
 
-// Методы для улучшения характеристик
 void Character::boostAttack(int amount) {
     attack += amount;
 }
@@ -89,22 +85,20 @@ void Character::boostDefense(int amount) {
 
 void Character::boostHealth(int amount) {
     maxHealth += amount;
-    health += amount; // Увеличиваем и текущее здоровье
+    health += amount;
 }
 
 void Character::boostMana(int amount) {
     if (hasMana) {
         maxMana += amount;
-        mana += amount; // Увеличиваем и текущую ману
+        mana += amount;
         
-        // Проверка, чтобы мана не превышала максимум
         if (mana > maxMana) {
             mana = maxMana;
         }
     }
 }
 
-// Методы для работы с золотом
 void Character::setGold(int amount) {
     gold = amount;
 }
@@ -115,13 +109,12 @@ void Character::addGold(int amount) {
 
 bool Character::spendGold(int amount) {
     if (amount > gold) {
-        return false; // Недостаточно золота
+        return false;
     }
     gold -= amount;
     return true;
 }
 
-// Методы для работы с инвентарем
 const std::vector<Item>& Character::getInventory() const {
     return inventory;
 }
@@ -136,4 +129,3 @@ void Character::removeFromInventory(int index) {
     }
 }
 
-// Реализация методов класса Character, если потребуется 

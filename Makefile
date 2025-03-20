@@ -12,7 +12,8 @@ PROJECT_OBJS = $(PROJECT_SRCS:.cpp=.o) $(COMMON_SRCS:.cpp=.o)
 TEST_OBJS = $(TEST_SRCS:.cpp=.o) $(COMMON_SRCS:.cpp=.o)
 
 SRCS = src/main.cpp src/GameEngine.cpp src/UIManager.cpp src/Character.cpp \
-       src/BattleSystem.cpp src/AIController.cpp src/ShopSystem.cpp src/InventorySystem.cpp
+       src/BattleSystem.cpp src/AIController.cpp src/ShopSystem.cpp src/InventorySystem.cpp \
+       src/BuffSystem.cpp src/PotionSystem.cpp src/ScoreManager.cpp
 
 OBJS = $(SRCS:.cpp=.o)
 

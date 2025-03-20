@@ -1,12 +1,14 @@
 #include "AIController.h"
 #include "UIManager.h"
+#include "InventorySystem.h"
+#include "PotionSystem.h"
+#include "BuffSystem.h"
 #include <iostream>
 #include <cstdlib>
 #include <random>
 #include <algorithm>
 
 AIController::AIController(UIManager& uiManager) : uiManager(uiManager) {
-    // Инициализируем вектор доступных действий
     availableActions = {
         {EnemyAttackType::NORMAL_ATTACK, "Обычная атака", 5, 1},
         {EnemyAttackType::DODGE_ATTACK, "Атака с уклонением", 4, 2},
@@ -15,12 +17,10 @@ AIController::AIController(UIManager& uiManager) : uiManager(uiManager) {
     
     resetAvailableAttacks();
     
-    // Инициализируем поведение для первого раунда
     attackInFirstRound = false;
     firstRoundAttackCounter = 0;
     firstRoundSpecialAttackLimit = 1;
     
-    // Инициализируем последний тип атаки как SKIP_TURN
     lastAttackType = EnemyAttackType::SKIP_TURN;
 }
 
@@ -30,22 +30,19 @@ void AIController::resetAvailableAttacks() {
 
 void AIController::distributePointsBasedOnPlayerChoice(Character& enemy, int playerChoice) {
     switch (playerChoice) {
-        case 1: // Игрок выбрал увеличить здоровье, враг увеличивает атаку
+        case 1:
             enemy.boostAttack(3);
             std::cout << "Дэн увеличивает свою атаку на 3!" << std::endl;
             break;
-        case 2: // Игрок выбрал увеличить атаку, враг увеличивает здоровье
+        case 2:
             enemy.boostHealth(10);
             std::cout << "Дэн увеличивает свое здоровье на 10!" << std::endl;
             break;
-        case 3: // Игрок выбрал увеличить ману, враг увеличивает свои очки действий (ману)
-            // Отдельно обрабатываем ману, так как у врага она используется как очки действий
-            // Допустим, враг получает 3 очка действий за каждое очко маны игрока
+        case 3:
             enemy.boostMana(5);
             std::cout << "Дэн получает 5 дополнительных очков действий!" << std::endl;
             break;
         default:
-            // Если игрок не сделал выбор, ИИ случайно выбирает характеристику
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_int_distribution<> distrib(1, 3);
@@ -57,24 +54,19 @@ void AIController::distributePointsBasedOnPlayerChoice(Character& enemy, int pla
 }
 
 void AIController::buyAttacksForRound(Character& enemy, int round) {
-    // Сбрасываем предыдущие атаки
     resetAvailableAttacks();
     
-    // Получаем доступные очки действий (ману) противника
     int availablePoints = enemy.getMana();
     
-    // Базовые затраты на атаки
-    int dodgeAttackCost = 15;
-    int stunAttackCost = 20;
-    int normalAttackCost = 10;
+    int dodgeAttackCost = 10;
+    int stunAttackCost = 15;
+    int normalAttackCost = 5;
     
-    // Базовая сила атак
-    int dodgePower = 10 + round * 2;  // Уменьшение шанса уклонения
-    int stunPower = 1;                // Количество пропускаемых ходов
-    int normalPower = enemy.getAttack();  // Обычный урон на основе атаки
+    int dodgePower = 8 + round * 3;
+    int stunPower = 1;
+    int normalPower = enemy.getAttack();
 
-    dodgePower += round * 2;
-    normalPower += round * 2;
+    normalPower += round;
     
     if (availablePoints >= stunAttackCost) {
         buyAttackOfType(EnemyAttackType::STUN_ATTACK, 1, stunPower, stunAttackCost, "Оглушающий удар");
@@ -97,7 +89,6 @@ void AIController::buyAttacksForRound(Character& enemy, int round) {
         availableAttacks.push_back(skipTurn);
     }
     
-    // Вывод информации о купленных атаках (для отладки)
     std::cout << "Дэн готовит " << availableAttacks.size() << " действий на этот раунд." << std::endl;
 }
 
@@ -114,33 +105,14 @@ void AIController::setFirstRoundBehavior() {
 }
 
 EnemyAttack AIController::determineNextAction(Character& enemy, int round, bool predictionOnly) {
-    // Если это предсказание, возвращаем случайную атаку из доступных, но не удаляем её
-    if (predictionOnly) {
-        if (!availableAttacks.empty()) {
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<> distrib(0, availableAttacks.size() - 1);
-            // Запоминаем индекс выбранной атаки для возможной синхронизации позже
-            int selectedIndex = distrib(gen);
-            return availableAttacks[selectedIndex];
-        } else {
-            return {EnemyAttackType::SKIP_TURN, "Пропуск хода", 0, 0};
-        }
-    }
-    
-    // Если у нас нет доступных атак, пропускаем ход
     if (availableAttacks.empty()) {
         lastAttackType = EnemyAttackType::SKIP_TURN;
         return {EnemyAttackType::SKIP_TURN, "Пропуск хода", 0, 0};
     }
     
-    // Если мы в первом раунде и установлен флаг атаки
     if (round == 1 && attackInFirstRound) {
-        // Если это первая атака в первом раунде, применяем специальное поведение
         if (firstRoundAttackCounter < firstRoundSpecialAttackLimit) {
-            firstRoundAttackCounter++;
-            
-            // Ищем оглушающую атаку в доступных
+            // В первом раунде пытаемся использовать оглушающую атаку
             std::vector<int> stunAttackIndices;
             for (size_t i = 0; i < availableAttacks.size(); ++i) {
                 if (availableAttacks[i].type == EnemyAttackType::STUN_ATTACK) {
@@ -148,42 +120,39 @@ EnemyAttack AIController::determineNextAction(Character& enemy, int round, bool 
                 }
             }
             
-            // Если есть оглушающие атаки, используем одну из них
             if (!stunAttackIndices.empty()) {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_int_distribution<> distrib(0, stunAttackIndices.size() - 1);
-                int selectedIndex = stunAttackIndices[distrib(gen)];
+                int selectedStunIndex = stunAttackIndices[distrib(gen)];
                 
-                EnemyAttack selectedAttack = availableAttacks[selectedIndex];
-                lastAttackType = selectedAttack.type;
+                EnemyAttack selectedAttack = availableAttacks[selectedStunIndex];
                 
-                // Удаляем использованную атаку из списка доступных
-                availableAttacks.erase(availableAttacks.begin() + selectedIndex);
+                if (!predictionOnly) {
+                    firstRoundAttackCounter++;
+                    lastAttackType = selectedAttack.type;
+                    availableAttacks.erase(availableAttacks.begin() + selectedStunIndex);
+                }
                 
                 return selectedAttack;
             }
         } else {
-            // После лимита атак сбрасываем счетчик и переходим к обычному поведению
             attackInFirstRound = false;
         }
     }
     
-    // Проверяем, есть ли у противника очки действий
     int enemyActionPoints = enemy.getMana();
     
     if (enemyActionPoints <= 0) {
-        // Если очков действий нет, пропускаем ход
         lastAttackType = EnemyAttackType::SKIP_TURN;
         return {EnemyAttackType::SKIP_TURN, "Пропуск хода", 0, 0};
     }
     
-    // Собираем доступные атаки в зависимости от очков действия
+    // Находим все доступные атаки, которые враг может использовать
     std::vector<int> availableIndices;
     for (size_t i = 0; i < availableAttacks.size(); ++i) {
         const auto& attack = availableAttacks[i];
         
-        // Не добавляем оглушающую атаку, если предыдущая атака тоже была оглушающей
         if (attack.type == EnemyAttackType::STUN_ATTACK && lastAttackType == EnemyAttackType::STUN_ATTACK) {
             continue;
         }
@@ -193,61 +162,51 @@ EnemyAttack AIController::determineNextAction(Character& enemy, int round, bool 
         }
     }
     
-    // Если нет доступных атак, пропускаем ход
     if (availableIndices.empty()) {
         lastAttackType = EnemyAttackType::SKIP_TURN;
         return {EnemyAttackType::SKIP_TURN, "Пропуск хода", 0, 0};
     }
     
-    // Выбираем случайную атаку из доступных
+    // Используем одно и то же зерно для генератора случайных чисел,
+    // чтобы predictionOnly и реальное использование дали один и тот же результат
     std::random_device rd;
-    std::mt19937 gen(rd());
+    unsigned seed = rd();
+    std::mt19937 gen(seed);
     std::uniform_int_distribution<> distrib(0, availableIndices.size() - 1);
     
-    int selectedIndex = availableIndices[distrib(gen)];
+    int randomIndex = distrib(gen);
+    int selectedIndex = availableIndices[randomIndex];
     EnemyAttack selectedAttack = availableAttacks[selectedIndex];
     
-    // Вычитаем стоимость атаки из очков действия противника
-    enemy.useMana(selectedAttack.cost);
-    
-    // Запоминаем тип последней атаки
-    lastAttackType = selectedAttack.type;
-    
-    // Удаляем использованную атаку из списка доступных
-    availableAttacks.erase(availableAttacks.begin() + selectedIndex);
+    if (!predictionOnly) {
+        lastAttackType = selectedAttack.type;
+        availableAttacks.erase(availableAttacks.begin() + selectedIndex);
+    }
     
     return selectedAttack;
 }
 
 void AIController::processEnemyTurn(Character& enemy, Character& player) {
-    // Простая логика ИИ для противника
-    // В зависимости от сложности и текущей ситуации ИИ выбирает действие
     
-    // Например, если у противника мало здоровья, он может использовать зелье
-    // Если у игрока мало здоровья, он может атаковать
-    // Если у противника достаточно маны, он может использовать магию
     
-    int action = rand() % 3; // 0 - атака, 1 - магия, 2 - предмет
+    int action = rand() % 3;
     
     switch (action) {
         case 0:
-            // Атака
             enemyAttack(enemy, player);
             break;
         case 1:
-            // Магия (если достаточно маны)
             if (enemy.getMana() >= 10) {
                 enemyUseMagic(enemy, player);
             } else {
-                enemyAttack(enemy, player); // Если недостаточно маны, атакует
+                enemyAttack(enemy, player);
             }
             break;
         case 2:
-            // Предмет (если есть в инвентаре)
             if (!enemy.getInventory().empty()) {
                 enemyUseItem(enemy);
             } else {
-                enemyAttack(enemy, player); // Если инвентарь пуст, атакует
+                enemyAttack(enemy, player);
             }
             break;
     }
@@ -257,33 +216,43 @@ void AIController::enemyAttack(Character& enemy, Character& player) {
     int damage = calculateDamage(enemy, player);
     player.takeDamage(damage);
     
-    // Не выводим сообщения, просто обновляем экран
     uiManager.displayBattleScreen(player, enemy);
 }
 
 void AIController::enemyUseMagic(Character& enemy, Character& player) {
-    // Логика использования магии противником
-    int damage = calculateDamage(enemy, player) + 3; // Магия наносит дополнительный урон
+    int damage = calculateDamage(enemy, player) + 3;
     player.takeDamage(damage);
     
-    // Не выводим сообщения, просто обновляем экран
     uiManager.displayBattleScreen(player, enemy);
 }
 
 void AIController::enemyUseItem(Character& enemy) {
-    // Логика использования предмета противником
-    // Например, восстановление здоровья
+    if (enemy.getInventory().empty()) {
+        return;
+    }
     
-    // Не выводим сообщения, просто обновляем экран
-    // uiManager.displayBattleScreen(player, enemy);
+    // Создаем временные экземпляры необходимых систем
+    BuffSystem buffSystem(uiManager);
+    PotionSystem potionSystem(uiManager, buffSystem);
+    
+    // Выбираем случайный предмет из инвентаря
+    int itemIndex = rand() % enemy.getInventory().size();
+    const Item& selectedItem = enemy.getInventory()[itemIndex];
+    
+    // Используем предмет через PotionSystem
+    bool potionUsed = potionSystem.usePotion(enemy, selectedItem);
+    
+    if (potionUsed) {
+        // Удаляем предмет из инвентаря
+        InventorySystem inventorySystem(uiManager);
+        inventorySystem.removeItem(enemy, itemIndex);
+    }
 }
 
 int AIController::calculateDamage(const Character& attacker, const Character& defender) {
-    // Простая формула расчета урона
-    int baseDamage = 8; // Базовый урон противника
+    int baseDamage = 8;
     int damage = baseDamage - defender.getDefense() / 5;
     
-    // Минимальный урон 1
     if (damage < 1) damage = 1;
     
     return damage;

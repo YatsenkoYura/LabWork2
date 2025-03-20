@@ -2,54 +2,45 @@
 #define GAME_ENGINE_H
 
 #include "Character.h"
-#include "BattleSystem.h"
+#include "UIManager.h"
 #include "AIController.h"
+#include "BattleSystem.h"
 #include "ShopSystem.h"
 #include "InventorySystem.h"
-#include "UIManager.h"
-#include <cstdlib>
-
-#ifdef _WIN32
-#include <windows.h> // Для Sleep()
-#else
-#include <unistd.h> // Для sleep()
-#endif
+#include "ScoreManager.h"
 
 class GameEngine {
 public:
     GameEngine();
     ~GameEngine();
     
-    void startGame();
     void run();
     
 private:
-    // Объекты для управления игровыми системами
     UIManager uiManager;
     AIController aiController;
     BattleSystem battleSystem;
     ShopSystem shopSystem;
     InventorySystem inventorySystem;
+    ScoreManager scoreManager;
     
-    // Игровые переменные
-    int currentRound;
-    int score;
-    
-    // Персонажи
     Character player;
     Character enemy;
     
-    // Игровые методы
-    void processSettings();
+    int currentRound;
+    
     void initializeGame();
     void runGameLoop();
-    void gameOver();
-    
-    // Методы управления персонажами
     void setupCharacters();
     void updateEnemyForNextRound();
+    void processSettings();
     bool processBattle();
+    void gameOver();
     void handlePostVictory(Character& player);
+    
+    bool showGameMenu();
+    void saveGame();
+    void loadGame();
 };
 
-#endif // GAME_ENGINE_H
+#endif
