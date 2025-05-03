@@ -1,5 +1,5 @@
-#include "UIManager.h"
-#include "BattleSystem.h"
+#include "../h/UIManager.h"
+#include "../h/BattleSystem.h"
 #include <iostream>
 #include <string>
 #include <limits>

@@ -1,4 +1,4 @@
-#include "Character.h"
+#include "../h/Character.h"
 
 Character::Character() 
     : name(""), health(100), maxHealth(100), defense(10), 

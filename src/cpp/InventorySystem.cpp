@@ -1,6 +1,6 @@
-#include "InventorySystem.h"
-#include "PotionSystem.h"
-#include "BuffSystem.h"
+#include "../h/InventorySystem.h"
+#include "../h/PotionSystem.h"
+#include "../h/BuffSystem.h"
 #include <iostream>
 
 InventorySystem::InventorySystem(UIManager& uiManager) : uiManager(uiManager) {

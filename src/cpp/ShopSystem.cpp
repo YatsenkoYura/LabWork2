@@ -1,13 +1,11 @@
-#include "ShopSystem.h"
+#include "../h/ShopSystem.h"
 #include <iostream>
 #include <cstdlib>
-#include <limits>
 #include <vector>
-#include <iomanip>
 #include <ctime>
 #include <random>
 #include <algorithm>
-#include "InventorySystem.h"
+#include "../h/InventorySystem.h"
 
 ShopSystem::ShopSystem(UIManager& uiManager) : uiManager(uiManager) {
     std::srand(static_cast<unsigned int>(std::time(nullptr)));

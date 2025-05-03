@@ -1,8 +1,8 @@
-#include "AIController.h"
-#include "UIManager.h"
-#include "InventorySystem.h"
-#include "PotionSystem.h"
-#include "BuffSystem.h"
+#include "../h/AIController.h"
+#include "../h/UIManager.h"
+#include "../h/InventorySystem.h"
+#include "../h/PotionSystem.h"
+#include "../h/BuffSystem.h"
 #include <iostream>
 #include <cstdlib>
 #include <random>

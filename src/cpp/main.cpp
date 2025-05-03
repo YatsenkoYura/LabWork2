@@ -1,5 +1,5 @@
 #include <iostream>
-#include "GameEngine.h"
+#include "../h/GameEngine.h"
 
 int main() {
     GameEngine gameEngine;
