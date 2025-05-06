@@ -9,6 +9,6 @@ st135624@stdudent.spbu.ru
 # Сборка
 make
 # Запуск
-./main
+./game
 # Запуск теста
 ./tests

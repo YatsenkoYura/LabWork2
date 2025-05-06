@@ -1,31 +1,40 @@
-TARGET_PROJECT = main
-TARGET_TEST = tests
-CXX = g++
-CXXFLAGS = -std=c++17 -I$(GTEST_DIR)/include
-LDFLAGS = -L$(GTEST_DIR)/lib -lgtest -lgtest_main -pthread
+CXX      = g++
+CXXFLAGS = -std=c++17 -I./src/cpp -I./src/h -I./common -I$(GTEST_DIR)/include
+LDFLAGS  = -L$(GTEST_DIR)/lib -lgtest -lgtest_main -pthread
 
-PROJECT_SRCS = $(wildcard src/*.cpp)
-TEST_SRCS = $(wildcard test/*.cpp)
-COMMON_SRCS = $(wildcard common/*.cpp)
+SRC_DIR  = src/cpp
+HDR_DIR  = src/h
+COMMON_DIR = common
+TEST_DIR = test
 
-PROJECT_OBJS = $(PROJECT_SRCS:.cpp=.o) $(COMMON_SRCS:.cpp=.o)
-TEST_OBJS = $(TEST_SRCS:.cpp=.o) $(COMMON_SRCS:.cpp=.o)
+# ===== Сборка игрового бинарника =====
+GAME_SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+GAME_OBJS = $(GAME_SRCS:.cpp=.o)
+TARGET = game
 
-all: $(TARGET_PROJECT) $(TARGET_TEST)
+# ===== Сборка тестов =====
+# Все cpp, кроме main.cpp (игровой main)
+PROJECT_SRCS = $(filter-out $(SRC_DIR)/main.cpp, $(wildcard $(SRC_DIR)/*.cpp))
+# Тестовые исходники + все модули без main.cpp
+TEST_SRCS = $(wildcard $(TEST_DIR)/*.cpp) $(PROJECT_SRCS)
+TEST_OBJS = $(TEST_SRCS:.cpp=.o)
+TEST_TARGET = tests
 
-$(TARGET_PROJECT): $(PROJECT_OBJS)
-	$(CXX) -o $@ $^
+all: $(TARGET) $(TEST_TARGET)
 
-$(TARGET_TEST): $(TEST_OBJS)
-	$(CXX) -o $@ $^ $(LDFLAGS)
+$(TARGET): $(GAME_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+$(TEST_TARGET): $(TEST_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(PROJECT_OBJS) $(TEST_OBJS) $(TARGET_PROJECT) $(TARGET_TEST)
+	rm -f $(SRC_DIR)/*.o $(TEST_DIR)/*.o $(TARGET) $(TEST_TARGET)
 
-test: $(TARGET_TEST)
-	./$(TARGET_TEST)
+test: $(TEST_TARGET)
+	./$(TEST_TARGET)
 
 .PHONY: all clean test
