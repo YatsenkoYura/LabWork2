@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 
+
 struct ShopItem {
     std::string name;
     std::string description;
