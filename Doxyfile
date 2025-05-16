@@ -1,0 +1,13 @@
+PROJECT_NAME      = "vsDen"
+
+INPUT             = src/h
+
+FILE_PATTERNS     = *.h
+
+RECURSIVE         = YES
+
+OUTPUT_DIRECTORY  = doc
+
+GENERATE_HTML     = YES
+
+OUTPUT_LANGUAGE   = English

@@ -6,27 +6,34 @@
 #include <fstream>
 #include <algorithm>
 #include "UIManager.h"
-#include "Character.h"  // Добавляем для доступа к данным персонажа
+#include "Character.h"
 
-// Структура для хранения результата игрока
+/**
+ * @file ScoreManager.h
+ * @brief Manages leaderboard, player scores and simple save/load.
+ */
+
+/**
+ * @struct PlayerScore
+ * @brief Stores a player's name, score, and amount of finished rounds.
+ */
 struct PlayerScore {
-    std::string playerName;
-    int score;
-    int rounds;
+    std::string playerName; ///< Player's name.
+    int score;              ///< High score value.
+    int rounds;             ///< Number of rounds reached.
 
-    // Добавляем конструктор по умолчанию
     PlayerScore() : playerName(""), score(0), rounds(0) {}
-    
-    PlayerScore(const std::string& name, int s, int r) 
-        : playerName(name), score(s), rounds(r) {}
-    
-    // Для сортировки по убыванию очков
+    PlayerScore(const std::string& name, int s, int r)
+            : playerName(name), score(s), rounds(r) {}
     bool operator<(const PlayerScore& other) const {
-        return score > other.score; // Сортировка по убыванию
+        return score > other.score;
     }
 };
 
-// Структура для сохранения игры
+/**
+ * @struct GameSaveData
+ * @brief Stores data about a single saved game session.
+ */
 struct GameSaveData {
     std::string playerName;
     int playerHealth;
@@ -38,56 +45,60 @@ struct GameSaveData {
     int playerGold;
     int currentRound;
     int currentScore;
-    std::vector<std::string> inventory; // Названия предметов в инвентаре
-    
+    std::vector<std::string> inventory;
+
     GameSaveData() {}
 };
 
+/**
+ * @class ScoreManager
+ * @brief Handles high scores, leaderboard display, and simple save/load system.
+ */
 class ScoreManager {
 public:
+    /// Constructor.
     ScoreManager(UIManager& uiManager);
-    
-    // Устанавливает и получает текущий счет
+
+    /// Set current score.
     void setScore(int score);
+    /// Get current score.
     int getScore() const;
-    
-    // Добавляет очки к текущему счету
+    /// Add points to score.
     void addScore(int points);
-    
-    // Сохраняет результат игры
+
+    /// Save player's score and rounds to leaderboard file.
     bool saveScore(const std::string& playerName, int rounds);
-    
-    // Загружает таблицу лидеров
+
+    /// Load all entries from leaderboard.
     std::vector<PlayerScore> loadLeaderboard();
-    
-    // Отображает таблицу лидеров на экране
+
+    /// Show leaderboard via UI.
     void displayLeaderboard();
-    
-    // Предлагает сохранить результат и обрабатывает ввод имени
+
+    /// Handle game over: save score and display leaderboard.
     void processGameOver(int rounds);
-    
-    // Новые методы для сохранения и загрузки игры
+
+    /// Save current game state.
     bool saveGame(const Character& player, int currentRound, const std::string& saveName);
+    /// Load previously saved game state.
     bool loadGame(Character& player, int& currentRound, std::string& playerName);
+
+    /// Show menu for saving current game.
     void displaySaveGameMenu(const Character& player, int currentRound);
+    /// Show menu and list for loading game.
     void displayLoadGameMenu();
+
+    /// Return true if there are any save files.
     bool hasSavedGames() const;
-    
+
 private:
-    UIManager& uiManager;
-    int currentScore;
-    
-    // Путь к файлу с таблицей лидеров
-    const std::string leaderboardFile = "leaderboard.txt";
-    
-    // Путь к файлу с сохраненными играми
-    const std::string saveGameFile = "savegames.dat";
-    
-    // Максимальное количество записей в таблице лидеров
-    const int maxLeaderboardEntries = 5;
-    
-    // Максимальное количество сохранений
-    const int maxSaveGames = 3;
+    UIManager& uiManager;      ///< Reference to UI.
+    int currentScore;          ///< Current running score.
+
+    const std::string leaderboardFile = "leaderboard.txt"; ///< Leaderboard file path.
+    const std::string saveGameFile = "savegames.dat";      ///< Save game file path.
+    const int maxLeaderboardEntries = 5; ///< Max number of scores shown.
+    const int maxSaveGames = 3;          ///< Max number of saves.
 };
 
-#endif 
+#endif
